@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, Bot, Brain, Clock, Cpu, Database, type LucideIcon } from "lucide-react";
 import { Cube, Sphere } from "@/components/shapes-3d";
 
@@ -28,6 +29,7 @@ export interface LessonCardData {
   trackLabel: string;
   difficulty: string;
   readTime: string;
+  photo?: { src: string; alt: string };
 }
 
 export function LessonCard({ l, i }: { l: LessonCardData; i: number }) {
@@ -38,13 +40,31 @@ export function LessonCard({ l, i }: { l: LessonCardData; i: number }) {
       className="group snap-start shrink-0 w-[78%] sm:w-[calc((100%-2.5rem)/3)] lg:w-[calc((100%-3.75rem)/4)] overflow-hidden rounded-2xl bg-card ring-1 ring-border shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10"
     >
       <div className={`relative h-36 overflow-hidden bg-gradient-to-br ${TINTS[i % TINTS.length]}`}>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="flex size-16 items-center justify-center rounded-2xl bg-white/80 text-primary shadow-lg ring-1 ring-white/60 backdrop-blur transition-transform group-hover:scale-110 dark:bg-white/10">
-            <Icon className="size-8" />
-          </span>
-        </div>
-        <Cube className="right-4 top-4" size={22} delay={i * 0.7} />
-        <Sphere className="left-5 bottom-4" size={18} delay={i * 0.5} />
+        {l.photo ? (
+          <>
+            <Image
+              src={l.photo.src}
+              alt={l.photo.alt}
+              fill
+              sizes="(min-width: 1024px) 280px, (min-width: 640px) 33vw, 80vw"
+              className="object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+            <span className="absolute left-3 bottom-3 flex size-9 items-center justify-center rounded-xl bg-white/90 text-primary shadow-lg">
+              <Icon className="size-5" />
+            </span>
+          </>
+        ) : (
+          <>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="flex size-16 items-center justify-center rounded-2xl bg-white/80 text-primary shadow-lg ring-1 ring-white/60 backdrop-blur transition-transform group-hover:scale-110 dark:bg-white/10">
+                <Icon className="size-8" />
+              </span>
+            </div>
+            <Cube className="right-4 top-4" size={22} delay={i * 0.7} />
+            <Sphere className="left-5 bottom-4" size={18} delay={i * 0.5} />
+          </>
+        )}
       </div>
       <div className="p-4">
         <div className="mb-2 flex items-center gap-2 text-[11px]">
@@ -72,7 +92,7 @@ export function TrackCard({
   t,
   i,
 }: {
-  t: { category: string; label: string; count: number; href: string; topics: string[] };
+  t: { category: string; label: string; count: number; href: string; topics: string[]; photo?: { src: string; alt: string } };
   i: number;
 }) {
   const Icon = ICONS[t.category] ?? Brain;
@@ -82,9 +102,21 @@ export function TrackCard({
       className="group snap-start shrink-0 w-[88%] sm:w-[calc((100%-1.25rem)/2)] overflow-hidden rounded-2xl ring-1 ring-border bg-card shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10"
     >
       <div className={`relative flex h-full flex-col sm:flex-row bg-gradient-to-br ${TINTS[(i + 1) % TINTS.length]}`}>
-        <div className="relative flex h-40 sm:h-auto sm:w-2/5 items-center justify-center">
-          <Cube className="left-6 top-6" size={30} delay={i} />
-          <span className="flex size-20 items-center justify-center rounded-3xl bg-white/85 text-primary shadow-xl dark:bg-white/10">
+        <div className="relative flex h-40 sm:h-auto sm:w-2/5 items-center justify-center overflow-hidden">
+          {t.photo && (
+            <>
+              <Image
+                src={t.photo.src}
+                alt={t.photo.alt}
+                fill
+                sizes="(min-width: 640px) 240px, 90vw"
+                className="object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-primary/25 mix-blend-multiply" />
+            </>
+          )}
+          {!t.photo && <Cube className="left-6 top-6" size={30} delay={i} />}
+          <span className="relative flex size-20 items-center justify-center rounded-3xl bg-white/85 text-primary shadow-xl dark:bg-white/10">
             <Icon className="size-10" />
           </span>
         </div>

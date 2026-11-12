@@ -7,6 +7,7 @@ import { LandingHero } from "@/components/landing-hero";
 import { CardCarousel } from "@/components/card-carousel";
 import { LessonCard, TrackCard, type LessonCardData } from "@/components/landing-cards";
 import { readingTime } from "@/lib/reading-time";
+import { getLessonPhoto } from "@/lib/lesson-photos";
 import { getAllDocs } from "@/lib/mdx";
 import { getTracks, trackLabel } from "@/lib/tracks";
 
@@ -33,6 +34,7 @@ export default function Home() {
       trackLabel: trackLabel(d.category),
       difficulty: d.difficulty,
       readTime: readingTime(d.content),
+      photo: getLessonPhoto(`${d.category}/${d.slug}`),
     }));
   const trackCount = tracks.length;
 
@@ -65,6 +67,7 @@ export default function Home() {
               count: t.lessons.length,
               href: t.lessons[0]?.href ?? "/docs",
               topics: t.lessons.map((x) => x.title),
+              photo: t.lessons.length ? getLessonPhoto(t.lessons[t.lessons.length - 1].id) : undefined,
             }}
           />
         ))}

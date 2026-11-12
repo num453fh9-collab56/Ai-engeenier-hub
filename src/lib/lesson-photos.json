@@ -1,0 +1,74 @@
+{
+  "01-foundations/intro": {
+    "src": "/images/lessons/01-foundations--intro.jpg",
+    "alt": "Laptop on a desk showing Python code",
+    "author": "yeiferr",
+    "source": "https://pixabay.com/photos/computer-laptop-tech-blue-computer-4795762/"
+  },
+  "01-foundations/prompt-engineering": {
+    "src": "/images/lessons/01-foundations--prompt-engineering.jpg",
+    "alt": "Illustration of a hand holding a phone with a friendly chatbot on screen",
+    "author": "Alexandra_Koch",
+    "source": "https://pixabay.com/photos/mobile-hand-ai-7720812/"
+  },
+  "01-foundations/transformers": {
+    "src": "/images/lessons/01-foundations--transformers.jpg",
+    "alt": "Glowing blue network of connected nodes shaped like a brain",
+    "author": "geralt",
+    "source": "https://pixabay.com/photos/artificial-intelligence-brain-think-3382521/"
+  },
+  "02-rag/hybrid-search": {
+    "src": "/images/lessons/02-rag--hybrid-search.jpg",
+    "alt": "Finger tapping a search bar on a dark background",
+    "author": "Alexandra_Koch",
+    "source": "https://pixabay.com/photos/search-search-engine-query-7212079/"
+  },
+  "02-rag/vector-dbs": {
+    "src": "/images/lessons/02-rag--vector-dbs.jpg",
+    "alt": "Server room with database and cloud icons overlaid",
+    "author": "bsdrouin",
+    "source": "https://pixabay.com/photos/network-server-system-2402637/"
+  },
+  "02-rag/rag-eval": {
+    "src": "/images/lessons/02-rag--rag-eval.jpg",
+    "alt": "Hand pointing a pen at analytics charts on a tablet",
+    "author": "AS_Photography",
+    "source": "https://pixabay.com/photos/digital-marketing-seo-google-1725340/"
+  },
+  "03-agents/react-pattern": {
+    "src": "/images/lessons/03-agents--react-pattern.jpg",
+    "alt": "Humanoid robot working at a holographic screen",
+    "author": "Computerizer",
+    "source": "https://pixabay.com/photos/robot-machine-technology-mecha-ai-2301646/"
+  },
+  "03-agents/swarms": {
+    "src": "/images/lessons/03-agents--swarms.jpg",
+    "alt": "Team of engineers working together on a wheeled robot",
+    "author": "This_is_Engineering",
+    "source": "https://pixabay.com/photos/engineer-engineering-mechanical-4915810/"
+  },
+  "04-finetuning/fine-tuning": {
+    "src": "/images/lessons/04-finetuning--fine-tuning.jpg",
+    "alt": "Close-up of colourful knobs on a mixing console",
+    "author": "ThorstenF",
+    "source": "https://pixabay.com/photos/mixer-dj-music-controller-buttons-4197733/"
+  },
+  "04-finetuning/groq-inference": {
+    "src": "/images/lessons/04-finetuning--groq-inference.jpg",
+    "alt": "Glowing processor chip on a blue circuit board",
+    "author": "bodkins18",
+    "source": "https://pixabay.com/photos/technology-processor-modernity-2818664/"
+  },
+  "04-finetuning/mlops": {
+    "src": "/images/lessons/04-finetuning--mlops.jpg",
+    "alt": "Long aisle of server racks in a blue-lit data centre",
+    "author": "11287688",
+    "source": "https://pixabay.com/photos/spatialship-future-space-travel-4688477/"
+  },
+  "04-finetuning/safety": {
+    "src": "/images/lessons/04-finetuning--safety.jpg",
+    "alt": "Digital padlock surrounded by a glowing cyber-security ring",
+    "author": "TheDigitalArtist",
+    "source": "https://pixabay.com/photos/cyber-security-internet-network-4610993/"
+  }
+}

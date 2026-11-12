@@ -15,6 +15,8 @@ import { LessonQuiz } from "@/components/lesson-quiz";
 import { LessonTutor } from "@/components/lesson-tutor";
 import { LessonComplete } from "@/components/lesson-complete";
 import { LessonIllustration } from "@/components/lesson-illustration";
+import { LessonPhoto } from "@/components/lesson-photo";
+import { getLessonPhoto } from "@/lib/lesson-photos";
 import { ShareButton } from "@/components/share-button";
 import { Breadcrumbs, KeyTakeaways, KeepGoing, RelatedLessons, splitTakeaways } from "@/components/lesson-extras";
 import { trackLabel } from "@/lib/tracks";
@@ -192,6 +194,9 @@ export default async function DocPage({ params }: PageProps) {
               ))}
             </div>
           </header>
+          {getLessonPhoto(`${category}/${slug}`) && (
+            <LessonPhoto photo={getLessonPhoto(`${category}/${slug}`)!} />
+          )}
           <LessonIllustration category={category} slug={slug} title={doc.title} />
           <KeyTakeaways items={takeaways} />
           <div className="prose prose-zinc dark:prose-invert sm:prose-lg max-w-none prose-pre:overflow-x-auto prose-table:block prose-table:overflow-x-auto">
