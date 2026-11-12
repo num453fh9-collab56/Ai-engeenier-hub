@@ -1,98 +1,65 @@
-// AI Engineering Hub logo: a brain whose left half is a neural network and
-// right half a circuit board, a glowing core in the middle, framed by code
-// brackets. Pure SVG; colours come from props so it also works in OG images.
-type Colors = { ink?: string; deep?: string };
+// AI Engineering Hub logo: code braces { } around a glowing AI spark ✦.
+// Pure SVG; colours come from props so it also renders in OG images.
+type Colors = { ink?: string; deep?: string }; // deep kept for older call sites; unused
 
-const MESH: [number, number][] = [
-  [30, 20], [44, 14], [52, 24], [22, 34], [38, 32], [16, 48], [32, 46], [22, 62], [36, 62], [44, 76], [28, 76],
-];
-const MESH_LINKS: [number, number][] = [
-  [0, 1], [1, 2], [0, 3], [0, 4], [1, 4], [2, 4], [3, 4], [3, 5], [4, 6], [5, 6], [5, 7], [6, 7], [6, 8], [7, 8], [8, 9], [7, 10], [10, 9],
-];
-const CORE: [number, number][] = [[52, 46], [58, 40], [66, 42], [69, 50], [63, 57], [55, 55], [60, 49]];
-const CORE_LINKS: [number, number][] = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0], [6, 0], [6, 2], [6, 4], [6, 1], [6, 3]];
+// Four-point sparkle centred on (cx, cy) with "radius" r (concave sides)
+const sparkle = (cx: number, cy: number, r: number, k = 0.16) => {
+  const c = r * k; // how far the curves pull toward the centre
+  return `M${cx},${cy - r} Q${cx + c},${cy - c} ${cx + r},${cy} Q${cx + c},${cy + c} ${cx},${cy + r} Q${cx - c},${cy + c} ${cx - r},${cy} Q${cx - c},${cy - c} ${cx},${cy - r} Z`;
+};
 
-const LEFT =
-  "M58,8 C50,3 40,5 36,11 C27,9 19,15 19,24 C11,28 9,38 13,45 C7,51 9,63 18,67 C16,77 24,85 34,83 C39,91 51,93 58,88 Z";
-const RIGHT =
-  "M62,8 C70,3 80,5 84,11 C93,9 101,15 101,24 C109,28 111,38 107,45 C113,51 111,63 102,67 C104,77 96,85 86,83 C81,91 69,93 62,88 Z";
-
-const TRACES: { d: string; end: [number, number]; c: "a" | "b" }[] = [
-  { d: "M72,31 L76,22 H86", end: [88, 22], c: "a" },
-  { d: "M79,40 L88,31 H96", end: [98, 31], c: "a" },
-  { d: "M80,48 H100", end: [102, 48], c: "b" },
-  { d: "M79,56 L88,62 H98", end: [100, 62], c: "a" },
-  { d: "M73,67 L80,74 V80", end: [80, 82], c: "b" },
-  { d: "M66,70 V82", end: [66, 84], c: "a" },
-];
+const LEFT_BRACE = "M34,14 C23,14 22,21 22,30 L22,39 C22,46 18,50 11,50 C18,50 22,54 22,61 L22,70 C22,79 23,86 34,86";
+const RIGHT_BRACE = "M86,14 C97,14 98,21 98,30 L98,39 C98,46 102,50 109,50 C102,50 98,54 98,61 L98,70 C98,79 97,86 86,86";
 
 export function LogoMark({
   size = 32,
   className = "",
-  withBrackets = true,
+  withBrackets = true,           // false → compact square app-icon tile
   ink = "var(--logo-ink)",
-  deep = "var(--logo-deep)",
 }: { size?: number; className?: string; withBrackets?: boolean } & Colors) {
-  const vb = withBrackets ? "-22 0 164 100" : "6 0 108 100";
-  const w = withBrackets ? size * 1.64 : size * 1.08;
+  if (!withBrackets) {
+    // Square tile for favicons / app icons: white braces + spark on a gradient
+    return (
+      <svg width={size} height={size} viewBox="0 0 120 120" fill="none" role="img" aria-label="AI Engineering Hub logo" className={className}>
+        <defs>
+          <linearGradient id="aeh-tile" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#3b82f6" />
+            <stop offset="1" stopColor="#7c3aed" />
+          </linearGradient>
+        </defs>
+        <rect width="120" height="120" rx="28" fill="url(#aeh-tile)" />
+        <g transform="translate(0,10)">
+          <g stroke="#ffffff" strokeWidth={8} strokeLinecap="round" strokeLinejoin="round" fill="none">
+            <path d={LEFT_BRACE} />
+            <path d={RIGHT_BRACE} />
+          </g>
+          <path d={sparkle(60, 50, 24)} fill="#ffffff" />
+          <path d={sparkle(78, 27, 7)} fill="#a5f3fc" />
+        </g>
+      </svg>
+    );
+  }
+
   return (
-    <svg width={w} height={size} viewBox={vb} fill="none" role="img" aria-label="AI Engineering Hub logo" className={className}>
+    <svg width={size * 1.2} height={size} viewBox="0 0 120 100" fill="none" role="img" aria-label="AI Engineering Hub logo" className={className}>
       <defs>
-        <linearGradient id="aeh-left" x1="10" y1="10" x2="58" y2="90" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#a5f3fc" />
-          <stop offset="0.55" stopColor="#60a5fa" />
-          <stop offset="1" stopColor="#2563eb" />
-        </linearGradient>
-        <linearGradient id="aeh-ring" x1="40" y1="30" x2="80" y2="70" gradientUnits="userSpaceOnUse">
+        <linearGradient id="aeh-spark" x1="36" y1="24" x2="84" y2="78" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="#22d3ee" />
-          <stop offset="1" stopColor="#a78bfa" />
+          <stop offset="0.5" stopColor="#3b82f6" />
+          <stop offset="1" stopColor="#a855f7" />
         </linearGradient>
-        <radialGradient id="aeh-glow" cx="60" cy="50" r="34" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#38bdf8" stopOpacity="0.55" />
-          <stop offset="1" stopColor="#38bdf8" stopOpacity="0" />
+        <radialGradient id="aeh-glow" cx="60" cy="50" r="30" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#60a5fa" stopOpacity="0.45" />
+          <stop offset="1" stopColor="#60a5fa" stopOpacity="0" />
         </radialGradient>
       </defs>
-
-      {/* left hemisphere: neural mesh */}
-      <path d={LEFT} fill="url(#aeh-left)" stroke={ink} strokeWidth={4} strokeLinejoin="round" />
-      <g stroke={ink} strokeWidth={1.6} strokeLinecap="round">
-        {MESH_LINKS.map(([a, b], i) => (
-          <line key={i} x1={MESH[a][0]} y1={MESH[a][1]} x2={MESH[b][0]} y2={MESH[b][1]} />
-        ))}
+      <circle cx="60" cy="50" r="30" fill="url(#aeh-glow)" />
+      <g stroke={ink} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" fill="none">
+        <path d={LEFT_BRACE} />
+        <path d={RIGHT_BRACE} />
       </g>
-      {MESH.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={2.4} fill={ink} />
-      ))}
-
-      {/* right hemisphere: circuit board */}
-      <path d={RIGHT} fill={deep} stroke={ink} strokeWidth={4} strokeLinejoin="round" />
-      {TRACES.map((t, i) => (
-        <g key={i} stroke={t.c === "a" ? "#22d3ee" : "#a78bfa"} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-          <path d={t.d} />
-          <circle cx={t.end[0]} cy={t.end[1]} r={2.4} fill={deep} />
-        </g>
-      ))}
-
-      {/* glowing core */}
-      <circle cx={60} cy={50} r={34} fill="url(#aeh-glow)" />
-      <circle cx={60} cy={50} r={20} fill={deep} stroke="url(#aeh-ring)" strokeWidth={3.5} />
-      <g stroke="#67e8f9" strokeWidth={1.3} strokeLinecap="round">
-        {CORE_LINKS.map(([a, b], i) => (
-          <line key={i} x1={CORE[a][0]} y1={CORE[a][1]} x2={CORE[b][0]} y2={CORE[b][1]} />
-        ))}
-      </g>
-      {CORE.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={i === 6 ? 2.6 : 1.8} fill={i === 6 ? "#ffffff" : "#a5f3fc"} />
-      ))}
-
-      {/* code brackets  < … /> */}
-      {withBrackets && (
-        <g stroke={ink} strokeWidth={6} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M-6,36 L-18,50 L-6,64" />
-          <path d="M113,66 L121,34" />
-          <path d="M126,36 L138,50 L126,64" />
-        </g>
-      )}
+      <path d={sparkle(60, 50, 27)} fill="url(#aeh-spark)" />
+      <path d={sparkle(79, 26, 8)} fill="#22d3ee" />
     </svg>
   );
 }
