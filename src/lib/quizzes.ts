@@ -184,32 +184,59 @@ export const quizzes: Record<string, QuizQuestion[]> = {
   ],
   "02-rag/vector-dbs": [
     {
-      q: "HNSW is…",
+      q: "You indexed documents with one embedding model and now query with a different one. What happens?",
       options: [
-        "A graph-based approximate nearest neighbour index",
-        "An embedding model",
-        "A compression codec for text",
-        "A SQL join strategy",
+        "It works, just a bit slower",
+        "Rankings become meaningless — the vectors live in different spaces",
+        "The database converts the vectors automatically",
+        "Only the top result is affected",
       ],
-      answer: 0,
-      why: "Hierarchical Navigable Small World graphs give fast, high-recall ANN search.",
-    },
-    {
-      q: "What does PGVector add to Postgres?",
-      options: [
-        "A vector column type and similarity search",
-        "A built-in LLM",
-        "GPU acceleration for all queries",
-        "Automatic document chunking",
-      ],
-      answer: 0,
-      why: "It lets you keep embeddings next to relational data and query them with SQL.",
-    },
-    {
-      q: "Approximate (ANN) search trades a little ___ for a lot of speed.",
-      options: ["Security", "Recall/accuracy", "Storage format", "Embedding dimension"],
       answer: 1,
-      why: "ANN may occasionally miss the exact nearest neighbour, but scales to millions of vectors.",
+      why: "Each model has its own vector space. Index and query must use the same model (and dimension).",
+    },
+    {
+      q: "Why do vector databases use approximate (ANN) indexes like HNSW instead of comparing against every vector?",
+      options: [
+        "Exact search is impossible with embeddings",
+        "ANN gives better answers than exact search",
+        "Brute force grows linearly with data; ANN stays fast by trading a little recall",
+        "ANN needs no memory",
+      ],
+      answer: 2,
+      why: "Flat search compares the query with every vector. ANN skips most of them and occasionally misses a true neighbour.",
+    },
+    {
+      q: "In HNSW, what does increasing ef_search do?",
+      options: [
+        "Improves recall but makes each query slower",
+        "Shrinks the index on disk",
+        "Changes the embedding dimension",
+        "Makes indexing faster",
+      ],
+      answer: 0,
+      why: "ef_search is the size of the candidate list explored per query: more candidates, better recall, more latency.",
+    },
+    {
+      q: "A multi-tenant app fetches the top 5 results and then removes other customers' documents. What's the risk?",
+      options: [
+        "None — that's the recommended pattern",
+        "The query becomes more accurate",
+        "All 5 may belong to other tenants, leaving zero results",
+        "It uses more GPU memory",
+      ],
+      answer: 2,
+      why: "Filter during the search (metadata filters, namespaces, SQL WHERE), not after it.",
+    },
+    {
+      q: "Your team already runs PostgreSQL and has about 500k documents. Which choice usually makes the most sense to start with?",
+      options: [
+        "pgvector — one database, SQL joins and transactions",
+        "Build a custom ANN index from scratch",
+        "Store vectors in a CSV file",
+        "Always a separate managed vector DB, no matter what",
+      ],
+      answer: 0,
+      why: "pgvector keeps vectors next to your data with no new infrastructure; move to a dedicated DB if scale or filtering demands it.",
     },
   ],
   "03-agents/react-pattern": [

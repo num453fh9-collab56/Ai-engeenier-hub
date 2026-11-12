@@ -1,6 +1,6 @@
 ---
 title: "Vector Databases: Pinecone, Qdrant & PGVector"
-description: "Compare architectures, indexing strategies, and production deployment patterns for vector databases."
+description: "How vector databases find similar meaning in milliseconds — embeddings, similarity metrics, HNSW, filtering and quantization — with a runnable semantic-search project and a practical guide to choosing Pinecone, Qdrant or pgvector."
 category: "02-rag"
 order: 2
 difficulty: "intermediate"
@@ -14,78 +14,290 @@ tags:
 slug: "vector-dbs"
 ---
 
-## Introduction
+## Why This Matters
 
-Vector databases store and query embeddings using approximate nearest neighbor (ANN) search. This guide compares three leading options.
+Imagine a support bot for an online store. A customer types *"my parcel never showed up"*. Your help centre has an article titled *"What to do if your order hasn't arrived"*. A keyword search finds almost nothing — the two sentences share no important words. Yet any human sees they mean the same thing.
 
-## Indexing Strategies
+A **vector database** is what lets software see it too. It stores text (or images, or audio) as lists of numbers called **embeddings**, where similar meaning ends up as nearby points. Asking "what is similar to this?" becomes a geometry question: *which stored points are closest to my query point?*
 
-| Index Type | Pinecone | Qdrant | PGVector |
-|-----------|----------|--------|----------|
-| HNSW | ✅ | ✅ | ✅ |
-| IVF | — | ✅ | ✅ |
-| Scalar Quantization | ✅ | ✅ | — |
-| Product Quantization | ✅ | ✅ | — |
+This is the retrieval engine inside almost every RAG system, semantic search box, recommendation feed and "related articles" widget. If the retriever returns the wrong chunks, even the best LLM will answer from the wrong facts — so understanding how this layer works is one of the most valuable skills an AI engineer can have.
 
-## Pinecone Example
+By the end of this lesson you will be able to:
+
+- explain what an embedding is and how similarity is measured,
+- describe how HNSW makes search over millions of vectors fast,
+- build a working semantic search engine on your laptop with no API keys,
+- choose between Pinecone, Qdrant and pgvector for a real project.
+
+## How Vector Search Works
+
+### 1. Embeddings: meaning as coordinates
+
+An **embedding model** turns a piece of text into a fixed-length vector. The popular open model `all-MiniLM-L6-v2` from Sentence-Transformers outputs **384 numbers** per text; OpenAI's `text-embedding-3-small` outputs **1,536**. You never read these numbers yourself — what matters is that the model was trained so that texts with similar meaning get vectors that point in similar directions.
+
+Two rules follow from this, and breaking them is the most common beginner bug:
+
+1. **Index and query with the same model.** Vectors from different models live in different "spaces" and cannot be compared.
+2. **The dimension is fixed per collection.** Changing the model usually means re-embedding everything.
+
+### 2. Measuring "close": similarity metrics
+
+| Metric | What it compares | Typical use |
+|---|---|---|
+| **Cosine similarity** | The angle between vectors (ignores length) | Most text embedding models |
+| **Dot product** | Angle *and* length | Models trained for it; equals cosine when vectors are normalized |
+| **Euclidean (L2) distance** | Straight-line distance | Some image and older models |
+
+Use the metric your embedding model was trained for — its model card says which. A practical habit: **normalize** your vectors to length 1. Then cosine similarity and dot product give the same ranking, and many databases can use the faster dot-product path.
+
+### 3. Why not just compare against everything?
+
+The simplest search ("brute force" or *flat* search) compares the query with every stored vector. For 1 million vectors of 384 dimensions, that is roughly 384 million multiplications per query. That is fine for a few thousand documents, but it grows linearly with your data, and latency quickly becomes a problem.
+
+Vector databases instead use **Approximate Nearest Neighbour (ANN)** indexes. They give up a tiny amount of accuracy — occasionally missing the true closest match — in exchange for answers that stay fast as your data grows — at millions of vectors, often orders of magnitude faster than brute force. The share of true nearest neighbours an index actually returns is called **recall**, and it is the number you tune.
+
+### 4. HNSW: the index behind most vector databases
+
+**Hierarchical Navigable Small World (HNSW)** graphs, introduced by Malkov and Yashunin, are the default index in Qdrant, pgvector, Weaviate, Milvus and many others. The animated diagram at the top of this page shows the idea:
+
+- Every vector is a node in a graph, linked to its nearest neighbours.
+- The graph has **layers**. The bottom layer contains every vector; each higher layer keeps only a small random sample.
+- A search **enters at the top layer**, greedily hops toward the query, then **drops down a layer** and repeats with finer detail, until it reaches the bottom layer and returns the closest nodes it found.
+
+It's like travelling by motorway first, then main roads, then side streets.
+
+Three settings control the trade-off between speed, memory and recall:
+
+| Setting | Meaning | Effect of a higher value |
+|---|---|---|
+| `m` | Links per node | Better recall, more memory |
+| `ef_construction` | Candidate list size while building | Better graph quality, slower indexing |
+| `ef_search` (`ef`) | Candidate list size while querying | Better recall, slower queries |
+
+For example, pgvector's defaults are `m = 16` and `ef_construction = 64`, with `hnsw.ef_search = 40` at query time. Start with the defaults and only tune `ef_search` once you have measured recall (see *Production Tips*).
+
+### 5. Two more ideas you will meet
+
+- **Filtering.** Real queries are rarely *"anything similar"*; they are *"similar, but only from this customer's documents, published this year"*. Good vector databases apply metadata filters **during** the search, not after it — otherwise you might fetch the top 5 and then filter them all away.
+- **Quantization.** A 384-dimension vector stored as 32-bit floats takes 1,536 bytes, so one million of them need about 1.5 GB just for the raw vectors. **Scalar quantization** stores each number in 8 bits instead — roughly 4× less memory for a small loss of precision. **Binary** and **product quantization** compress even further. This is how large indexes stay affordable.
+
+## Hands-On: The Three Databases in Code
+
+All three examples below store a few texts with metadata and run a filtered similarity search. They assume you already have embeddings, created like this:
 
 ```python
-import pinecone
+# pip install sentence-transformers
+from sentence_transformers import SentenceTransformer
 
-pinecone.init(api_key="your-key", environment="gcp-starter")
-index = pinecone.Index("rag-index")
-
-index.upsert(vectors=[
-    ("id1", [0.1, 0.2, ...], {"text": "doc1"}),
-    ("id2", [0.3, 0.4, ...], {"text": "doc2"}),
-])
-
-results = index.query(
-    vector=[0.15, 0.25, ...],
-    top_k=5,
-    include_metadata=True,
-)
+model = SentenceTransformer("all-MiniLM-L6-v2")   # 384-dimensional vectors
+texts = ["How do I reset my password?", "What to do if your order hasn't arrived"]
+vectors = model.encode(texts, normalize_embeddings=True)  # normalized → cosine == dot product
 ```
 
-## Qdrant Example
+### Qdrant (open source, runs in-process for learning)
 
 ```python
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams
+# pip install qdrant-client
+from qdrant_client import QdrantClient, models
 
-client = QdrantClient("localhost", port=6333)
+client = QdrantClient(":memory:")  # local mode; use QdrantClient(url="http://localhost:6333") for a server
+
 client.create_collection(
-    collection_name="docs",
-    vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+    collection_name="help_center",
+    vectors_config=models.VectorParams(size=384, distance=models.Distance.COSINE),
 )
 
 client.upsert(
-    collection_name="docs",
+    collection_name="help_center",
     points=[
-        {"id": 1, "vector": [0.1, 0.2, ...], "payload": {"text": "doc1"}},
+        models.PointStruct(id=i, vector=vec.tolist(), payload={"text": text, "section": "orders"})
+        for i, (text, vec) in enumerate(zip(texts, vectors))
     ],
 )
+
+query = model.encode("my parcel never showed up", normalize_embeddings=True)
+hits = client.query_points(
+    collection_name="help_center",
+    query=query.tolist(),
+    query_filter=models.Filter(
+        must=[models.FieldCondition(key="section", match=models.MatchValue(value="orders"))]
+    ),
+    limit=3,
+).points
+
+for hit in hits:
+    print(round(hit.score, 3), hit.payload["text"])
 ```
 
-## PGVector Example
+### Pinecone (fully managed, serverless)
+
+```python
+# pip install pinecone
+from pinecone import Pinecone, ServerlessSpec
+
+pc = Pinecone(api_key="YOUR_API_KEY")  # read it from an environment variable in real code
+
+if "help-center" not in pc.list_indexes().names():
+    pc.create_index(
+        name="help-center",
+        dimension=384,
+        metric="cosine",
+        spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+    )
+
+index = pc.Index("help-center")
+index.upsert(vectors=[
+    {"id": str(i), "values": vec.tolist(), "metadata": {"text": text, "section": "orders"}}
+    for i, (text, vec) in enumerate(zip(texts, vectors))
+])
+
+result = index.query(
+    vector=query.tolist(),
+    top_k=3,
+    filter={"section": {"$eq": "orders"}},
+    include_metadata=True,
+)
+for match in result.matches:
+    print(round(match.score, 3), match.metadata["text"])
+```
+
+> Older tutorials use `pinecone.init(...)`. That belongs to the retired v2 client and no longer works — always use the `Pinecone(...)` class shown above.
+
+### pgvector (vectors inside PostgreSQL)
 
 ```sql
-CREATE EXTENSION vector;
-CREATE TABLE documents (
-    id SERIAL PRIMARY KEY,
-    content TEXT,
-    embedding vector(1536)
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE help_articles (
+    id        bigserial PRIMARY KEY,
+    section   text NOT NULL,
+    content   text NOT NULL,
+    embedding vector(384) NOT NULL
 );
 
-CREATE INDEX ON documents USING hnsw (embedding vector_cosine_ops);
+-- HNSW index for cosine distance
+CREATE INDEX ON help_articles USING hnsw (embedding vector_cosine_ops);
 
-SELECT content FROM documents
-ORDER BY embedding <=> '[0.1, 0.2, ...]'
-LIMIT 5;
+-- <=> is cosine distance (smaller = more similar), so similarity = 1 - distance
+SELECT content, 1 - (embedding <=> $1) AS similarity
+FROM help_articles
+WHERE section = 'orders'
+ORDER BY embedding <=> $1
+LIMIT 3;
 ```
+
+pgvector gives you three distance operators: `<->` (L2 distance), `<=>` (cosine distance) and `<#>` (negative inner product). Because it is ordinary SQL, you can join vectors with your users, orders or permissions tables in the same query — something dedicated vector databases can't do.
+
+## Choosing the Right Database
+
+| | **Pinecone** | **Qdrant** | **pgvector** |
+|---|---|---|---|
+| What it is | Fully managed, serverless service | Open-source vector DB (Rust), self-host or managed cloud | Extension for PostgreSQL |
+| Operations | None — no servers to run | You run it (or pay for Qdrant Cloud) | Your existing Postgres |
+| Filtering | Metadata filters | Rich payload filters and indexes | Full SQL `WHERE` and joins |
+| Best when | You want zero ops and fast scaling | You want control, self-hosting or advanced filtering | You already use Postgres and want one database |
+| Watch out for | Vendor lock-in; usage-based cost | You own uptime, backups and upgrades | Tuning and memory needs grow with very large indexes |
+
+**A simple rule of thumb:**
+
+1. **Already on PostgreSQL** and under a few million vectors? Start with **pgvector** — one database, one backup, transactional consistency.
+2. **Need self-hosting**, data-residency control or heavy filtering? Choose **Qdrant**.
+3. **Want no infrastructure at all** and expect fast growth? Choose **Pinecone**.
+
+Other good options — Weaviate, Milvus and Chroma — are compared side by side in our [AI Tools Directory](/directory).
+
+## Mini Project: Semantic FAQ Search
+
+Build a search box that understands meaning, not just keywords. It runs fully on your laptop: no API keys, no servers.
+
+```python
+# pip install sentence-transformers qdrant-client
+from sentence_transformers import SentenceTransformer
+from qdrant_client import QdrantClient, models
+
+FAQ = [
+    ("orders",   "What to do if your order hasn't arrived"),
+    ("orders",   "How to track a shipment"),
+    ("orders",   "Changing the delivery address after ordering"),
+    ("account",  "How do I reset my password?"),
+    ("account",  "Enable two-factor authentication"),
+    ("payments", "Why was my card declined?"),
+    ("payments", "Requesting a refund for a cancelled order"),
+]
+
+model = SentenceTransformer("all-MiniLM-L6-v2")
+client = QdrantClient(":memory:")
+client.create_collection(
+    "faq",
+    vectors_config=models.VectorParams(size=384, distance=models.Distance.COSINE),
+)
+
+vectors = model.encode([q for _, q in FAQ], normalize_embeddings=True)
+client.upsert(
+    "faq",
+    points=[
+        models.PointStruct(id=i, vector=v.tolist(), payload={"section": s, "question": q})
+        for i, ((s, q), v) in enumerate(zip(FAQ, vectors))
+    ],
+)
+
+def search(text: str, section: str | None = None, k: int = 3):
+    flt = None
+    if section:
+        flt = models.Filter(must=[models.FieldCondition(key="section", match=models.MatchValue(value=section))])
+    qv = model.encode(text, normalize_embeddings=True).tolist()
+    return client.query_points("faq", query=qv, query_filter=flt, limit=k).points
+
+while True:
+    text = input("\nAsk a question (or 'q' to quit): ").strip()
+    if text.lower() == "q":
+        break
+    for hit in search(text):
+        print(f"  {hit.score:.3f}  [{hit.payload['section']}]  {hit.payload['question']}")
+```
+
+Try queries that share **no keywords** with the FAQ, such as *"my parcel never showed up"*, *"I forgot my login"* or *"money back please"*. The right answers should rank first.
+
+**Stretch goals**
+
+1. Add a `section` filter to the input (for example, typing `payments: refund`).
+2. Print a "no good match" message when the top score is below a threshold you choose by experiment.
+3. Replace `":memory:"` with a Qdrant server in Docker and keep the data between runs.
+4. Feed the top 3 results into an LLM prompt — you've just built the "R" in RAG.
+
+## Common Mistakes
+
+1. **Mixing embedding models.** Indexing with one model and querying with another gives nonsense rankings. Store the model name alongside your collection.
+2. **Using the wrong metric.** Check the model card. If you use cosine or dot product, normalize your vectors.
+3. **Storing vectors without the source text.** You need the original text and metadata (URL, title, date) to show citations and to debug.
+4. **Bad chunking.** Whole 30-page PDFs as one vector are too vague; single sentences lack context. Start around a few hundred tokens with some overlap, then measure.
+5. **Filtering after retrieval.** Fetching the top 5 and then dropping the wrong tenant's documents can leave zero results. Use the database's built-in filters.
+6. **Never measuring recall.** If you don't compare against an exact search, you don't know how much your index settings are costing you.
+7. **Forgetting to re-index after a model upgrade.** New model, new vector space — re-embed everything and swap collections atomically.
+
+## Production Tips
+
+- **Measure recall@k.** Take a few hundred real queries, run an exact (flat) search as ground truth, and compare it with your ANN results. Raise `ef_search` until recall is good enough, then stop — every step costs latency.
+- **Use deterministic IDs.** Derive each point's ID from its source (for example, a hash of document ID plus chunk number) so re-ingesting a document *updates* it instead of creating duplicates.
+- **Batch your writes.** Upsert hundreds of vectors per request instead of one at a time; embedding and indexing are much faster in batches.
+- **Plan for multi-tenancy early.** Separate customers with Pinecone namespaces, a tenant field plus filter in Qdrant, or row-level security in Postgres.
+- **Quantize when memory gets expensive.** Scalar quantization typically cuts vector memory about 4× with little recall loss — verify with your recall test.
+- **Combine with keyword search.** Pure vector search can miss exact terms such as product codes or error numbers. Hybrid retrieval fixes this — see [Hybrid Search & Re-ranking](/docs/02-rag/hybrid-search).
+- **Back up and monitor.** Track query latency (p95), recall on a fixed test set and index size. Self-hosted? Schedule snapshots.
 
 ## Key Takeaways
 
-- Pinecone: best for zero-ops, high-scale managed deployments
-- Qdrant: best for self-hosted with advanced filtering
-- PGVector: best when you already use PostgreSQL and need transactional guarantees
+- Embeddings turn meaning into vectors; similar meaning means nearby vectors — always index and query with the same model.
+- Use the similarity metric your model was trained for, and normalize vectors so cosine and dot product agree.
+- ANN indexes such as HNSW trade a little recall for huge speed-ups; tune `ef_search` by measuring recall, not by guessing.
+- Apply metadata filters inside the search, and store source text with every vector for citations and debugging.
+- pgvector if you're already on Postgres, Qdrant for control and rich filtering, Pinecone for zero-ops scaling.
+
+## Further Reading
+
+- Malkov & Yashunin, *Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs* — [arXiv:1603.09320](https://arxiv.org/abs/1603.09320)
+- [pgvector documentation (GitHub)](https://github.com/pgvector/pgvector)
+- [Qdrant documentation](https://qdrant.tech/documentation/)
+- [Pinecone documentation](https://docs.pinecone.io/)
+- [Sentence-Transformers documentation](https://www.sbert.net/)
+- Try it in your browser: the [embeddings playground](/playground) ranks sentences by cosine similarity.
