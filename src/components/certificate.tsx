@@ -36,7 +36,7 @@ export function Certificate({ track }: { track: TrackInfo }) {
     .map((l) => progress.completed[l.id])
     .sort()
     .at(-1);
-  const date = new Date(finished ?? Date.now()).toLocaleDateString(undefined, {
+  const date = new Date(finished as string).toLocaleDateString(undefined, {
     year: "numeric",
     month: "long",
     day: "numeric",
