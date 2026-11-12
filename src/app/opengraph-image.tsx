@@ -1,3 +1,4 @@
+import { LogoMark } from "@/components/logo";
 import { ImageResponse } from "next/og";
 
 export const alt = "AI Engineering Hub — Master AI Engineering from scratch";
@@ -18,17 +19,18 @@ export default function Image() {
           background: "linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%)",
         }}
       >
-        <div
-          style={{
-            fontSize: 20,
-            color: "#38bdf8",
-            textTransform: "uppercase",
-            letterSpacing: "0.12em",
-            marginBottom: 20,
-            fontFamily: "monospace",
-          }}
-        >
-          AI Engineering Hub
+        <div style={{ display: "flex", alignItems: "center", gap: 18, marginBottom: 28 }}>
+          <LogoMark size={72} ink="#dbeafe" deep="#12245c" />
+          <div
+            style={{
+              fontSize: 30,
+              fontWeight: 700,
+              color: "#ffffff",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            AI Engineering Hub
+          </div>
         </div>
         <div
           style={{

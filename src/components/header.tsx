@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Radio, Workflow, BarChart3, BookText, Library, Route, FlaskConical, Trophy, LayoutGrid } from "lucide-react";
+import { Workflow, BarChart3, BookText, Library, Route, FlaskConical, Trophy, LayoutGrid } from "lucide-react";
+import { LogoMark } from "@/components/logo";
 import { SearchCommand } from "@/components/search-command";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Button } from "@/components/ui/button";
@@ -14,8 +15,10 @@ export function Header() {
           href="/"
           className="flex items-center gap-2 font-semibold text-sm shrink-0"
         >
-          <Radio className="size-5 text-primary" />
-          <span className="hidden sm:inline">AI Engineering Hub</span>
+          <LogoMark size={28} />
+          <span className="hidden sm:inline">
+            AI Engineering <span className="text-primary">Hub</span>
+          </span>
         </Link>
 
         <div className="flex-1 flex justify-center max-w-md mx-2">

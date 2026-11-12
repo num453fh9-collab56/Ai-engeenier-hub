@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Radio } from "lucide-react";
+import { Logo } from "@/components/logo";
+
 
 export function Footer() {
   return (
@@ -8,8 +9,7 @@ export function Footer() {
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <Link href="/" className="flex items-center gap-2 font-semibold text-sm mb-3">
-              <Radio className="size-5 text-primary" />
-              AI Engineering Hub
+              <Logo size={28} />
             </Link>
             <p className="text-xs text-muted-foreground leading-relaxed max-w-xs">
               Master AI from raw math to autonomous agent swarms. With hands-on Python and TypeScript code.

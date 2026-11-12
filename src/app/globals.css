@@ -355,3 +355,7 @@ pre code > span::before {
 .xp .xp-past { opacity: 0.55; }
 .xp .xp-current { opacity: 1; filter: drop-shadow(0 0 10px color-mix(in oklab, var(--primary) 55%, transparent)); }
 @media (prefers-reduced-motion: reduce) { .xp [data-step] { transition: none; } }
+
+/* Logo colours (outline/brackets + circuit half) */
+:root { --logo-ink: #0f1e4a; --logo-deep: #12245c; }
+.dark { --logo-ink: #dbeafe; --logo-deep: #12245c; }

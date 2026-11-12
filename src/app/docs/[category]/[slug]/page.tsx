@@ -18,6 +18,7 @@ import { LessonIllustration } from "@/components/lesson-illustration";
 import { LessonPhoto } from "@/components/lesson-photo";
 import { getLessonPhoto } from "@/lib/lesson-photos";
 import { ShareButton } from "@/components/share-button";
+import { LogoMark } from "@/components/logo";
 import { Breadcrumbs, KeyTakeaways, KeepGoing, RelatedLessons, splitTakeaways } from "@/components/lesson-extras";
 import { trackLabel } from "@/lib/tracks";
 import fs from "fs";
@@ -164,9 +165,7 @@ export default async function DocPage({ params }: PageProps) {
             <p className="text-lg text-muted-foreground mb-4">{doc.description}</p>
             <div className="flex flex-wrap items-center justify-between gap-3 border-y border-border py-3">
               <div className="flex items-center gap-3">
-                <span className="flex size-9 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                  AE
-                </span>
+                <LogoMark size={36} />
                 <div className="text-xs leading-tight">
                   <p className="font-medium">AI Engineering Hub</p>
                   <p className="text-muted-foreground">

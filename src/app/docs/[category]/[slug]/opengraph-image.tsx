@@ -1,3 +1,4 @@
+import { LogoMark } from "@/components/logo";
 import { ImageResponse } from "next/og";
 import { getDocBySlug } from "@/lib/mdx";
 
@@ -52,6 +53,9 @@ export default async function Image({ params }: Props) {
             background: "radial-gradient(circle, rgba(56,189,248,0.1) 0%, transparent 70%)",
           }}
         />
+        <div style={{ display: "flex", marginBottom: 20 }}>
+          <LogoMark size={56} ink="#dbeafe" deep="#12245c" />
+        </div>
         <div
           style={{
             fontSize: 14,
@@ -63,7 +67,7 @@ export default async function Image({ params }: Props) {
             fontFamily: "monospace",
           }}
         >
-          {category.replace(/^\d+-/, "").replace(/-/g, " ")} &middot; AI Engineering Hub
+          {`${category.replace(/^\d+-/, "").replace(/-/g, " ")} · AI Engineering Hub`}
         </div>
         <h1
           style={{
