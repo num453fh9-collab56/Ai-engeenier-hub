@@ -17,7 +17,7 @@ import { LessonTutor } from "@/components/lesson-tutor";
 import { LessonComplete } from "@/components/lesson-complete";
 import { LessonIllustration } from "@/components/lesson-illustration";
 import { LessonPhoto } from "@/components/lesson-photo";
-import { getLessonPhoto } from "@/lib/lesson-photos";
+import { getLessonPhoto, getLessonPhoto2, splitAtMiddle } from "@/lib/lesson-photos";
 import { ShareButton } from "@/components/share-button";
 import { LogoMark } from "@/components/logo";
 import { Breadcrumbs, KeyTakeaways, KeepGoing, RelatedLessons, splitTakeaways } from "@/components/lesson-extras";
@@ -200,16 +200,23 @@ export default async function DocPage({ params }: PageProps) {
           <LessonIllustration category={category} slug={slug} title={doc.title} />
           <KeyTakeaways items={takeaways} />
           <div className="prose prose-zinc dark:prose-invert sm:prose-lg max-w-none prose-pre:overflow-x-auto prose-table:block prose-table:overflow-x-auto">
-            <MDXRemote
-              source={body}
-              components={mdxComponents}
-              options={{
+            {(() => {
+              const mdxOptions = {
                 // Content is our own MDX, so allow JS expressions in props
                 // (e.g. <Mermaid chart={`...`} />). Dangerous JS stays blocked.
                 blockJS: false,
                 mdxOptions: { remarkPlugins: [remarkGfm] },
-              }}
-            />
+              };
+              const photo2 = getLessonPhoto2(`${category}/${slug}`);
+              const [first, second] = photo2 ? splitAtMiddle(body) : [body, ""];
+              return (
+                <>
+                  <MDXRemote source={first} components={mdxComponents} options={mdxOptions} />
+                  {photo2 && <LessonPhoto photo={photo2} priority={false} caption={photo2.alt} />}
+                  {second && <MDXRemote source={second} components={mdxComponents} options={mdxOptions} />}
+                </>
+              );
+            })()}
           </div>
           {quizzes[`${category}/${slug}`] && (
             <LessonQuiz

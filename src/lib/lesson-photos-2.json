@@ -1,0 +1,74 @@
+{
+  "01-foundations/intro": {
+    "src": "/images/lessons/01-foundations--intro-2.jpg",
+    "alt": "Developer working at a desk lit by blue code on multiple monitors",
+    "author": "Innovalabs",
+    "source": "https://pixabay.com/photos/software-developer-web-developer-6521720/"
+  },
+  "01-foundations/prompt-engineering": {
+    "src": "/images/lessons/01-foundations--prompt-engineering-2.jpg",
+    "alt": "Wireframe human head formed from a glowing network of points",
+    "author": "geralt",
+    "source": "https://pixabay.com/illustrations/artificial-intelligence-brain-4389372/"
+  },
+  "01-foundations/transformers": {
+    "src": "/images/lessons/01-foundations--transformers-2.jpg",
+    "alt": "Glowing blue circuit-board head illustrating an artificial brain",
+    "author": "geralt",
+    "source": "https://pixabay.com/illustrations/artificial-intelligence-brain-think-3382507/"
+  },
+  "02-rag/hybrid-search": {
+    "src": "/images/lessons/02-rag--hybrid-search-2.jpg",
+    "alt": "Glowing globe surrounded by a burst of connected data points",
+    "author": "geralt",
+    "source": "https://pixabay.com/illustrations/earth-network-blockchain-globe-3537401/"
+  },
+  "02-rag/vector-dbs": {
+    "src": "/images/lessons/02-rag--vector-dbs-2.jpg",
+    "alt": "The Milky Way: millions of points in space, like vectors in an embedding space",
+    "author": "Pexels",
+    "source": "https://pixabay.com/photos/astronomy-bright-constellation-dark-1867616/"
+  },
+  "02-rag/rag-eval": {
+    "src": "/images/lessons/02-rag--rag-eval-2.jpg",
+    "alt": "Abstract web of connected lines and nodes on a dark background",
+    "author": "Placidplace",
+    "source": "https://pixabay.com/illustrations/frequency-wave-geometry-pattern-7776034/"
+  },
+  "03-agents/react-pattern": {
+    "src": "/images/lessons/03-agents--react-pattern-2.jpg",
+    "alt": "A robot hand and a human hand reaching toward each other",
+    "author": "TyliJura",
+    "source": "https://pixabay.com/illustrations/synthetic-organic-handshake-future-8597464/"
+  },
+  "03-agents/swarms": {
+    "src": "/images/lessons/03-agents--swarms-2.jpg",
+    "alt": "Close-up of a camera drone in flight",
+    "author": "Pexels",
+    "source": "https://pixabay.com/photos/drone-flying-camera-remote-control-1866961/"
+  },
+  "04-finetuning/fine-tuning": {
+    "src": "/images/lessons/04-finetuning--fine-tuning-2.jpg",
+    "alt": "Golden interlocking gears blended with circuit traces",
+    "author": "geralt",
+    "source": "https://pixabay.com/illustrations/clock-time-gear-gears-blue-70189/"
+  },
+  "04-finetuning/groq-inference": {
+    "src": "/images/lessons/04-finetuning--groq-inference-2.jpg",
+    "alt": "Futuristic figure sprinting through streaks of light",
+    "author": "alan9187",
+    "source": "https://pixabay.com/illustrations/superhero-girl-speed-runner-534120/"
+  },
+  "04-finetuning/mlops": {
+    "src": "/images/lessons/04-finetuning--mlops-2.jpg",
+    "alt": "Industrial control room with large monitoring consoles",
+    "author": "Pexels",
+    "source": "https://pixabay.com/photos/controls-indoors-room-computer-1853330/"
+  },
+  "04-finetuning/safety": {
+    "src": "/images/lessons/04-finetuning--safety-2.jpg",
+    "alt": "Digital security interface with concentric glowing rings",
+    "author": "TheDigitalArtist",
+    "source": "https://pixabay.com/illustrations/cyber-network-technology-futuristic-3400789/"
+  }
+}

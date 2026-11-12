@@ -3,6 +3,8 @@
 //   node scripts/fetch-lesson-photos.mjs candidates <outDir>   -> downloads 4 previews per lesson + candidates.json
 //   node scripts/fetch-lesson-photos.mjs pick <candidates.json> <choices.json>
 //        choices.json = { "<lessonId>": <candidateIndex> }  -> saves to public/images/lessons + src/lib/lesson-photos.json
+//   PHOTO_SET=2 node scripts/... -> second, mid-lesson photo set (Editor's Choice only)
+//        -> saves *-2.jpg + src/lib/lesson-photos-2.json
 import fs from "node:fs";
 import path from "node:path";
 
@@ -25,9 +27,38 @@ export const QUERIES = {
   "04-finetuning/safety": "cyber security lock",
 };
 
+// Second photo set: shown in the middle of each lesson
+export const QUERIES_2 = {
+  "01-foundations/intro": "programmer coding",
+  "01-foundations/prompt-engineering": "artificial intelligence communication",
+  "01-foundations/transformers": "artificial intelligence brain",
+  "02-rag/hybrid-search": "data network digital",
+  "02-rag/vector-dbs": "constellation network",
+  "02-rag/rag-eval": "data visualization",
+  "03-agents/react-pattern": "robot hand",
+  "03-agents/swarms": "drones",
+  "04-finetuning/fine-tuning": "precision engineering",
+  "04-finetuning/groq-inference": "light speed",
+  "04-finetuning/mlops": "control room monitors",
+  "04-finetuning/safety": "cyber security",
+};
+
+const SET2 = process.env.PHOTO_SET === "2";
+const ACTIVE = SET2 ? QUERIES_2 : QUERIES;
+const SUFFIX = SET2 ? "-2" : "";
+const META_FILE = SET2 ? "src/lib/lesson-photos-2.json" : "src/lib/lesson-photos.json";
+// never reuse a photo that is already on the site
+const USED = new Set(
+  ["src/lib/lesson-photos.json", "src/lib/lesson-photos-2.json"]
+    .filter((f) => fs.existsSync(f))
+    .flatMap((f) => Object.values(JSON.parse(fs.readFileSync(f, "utf8"))).map((m) => m.source))
+);
+
 async function search(q) {
   const u = new URL("https://pixabay.com/api/");
-  Object.entries({ key: KEY, q, image_type: "photo", orientation: "horizontal", safesearch: "true", per_page: "20", order: "popular", min_width: "1600" })
+  const params = { key: KEY, q, image_type: SET2 ? "all" : "photo", orientation: "horizontal", safesearch: "true", per_page: "20", order: "popular", min_width: "1600" };
+  if (SET2) params.editors_choice = "true";
+  Object.entries(params)
     .forEach(([k, v]) => u.searchParams.set(k, v));
   const r = await fetch(u);
   if (!r.ok) throw new Error(`Pixabay ${r.status} for "${q}": ${(await r.text()).slice(0, 120)}`);
@@ -48,8 +79,8 @@ if (mode === "candidates") {
   const out = {};
   const prev = only && fs.existsSync(path.join(a, "candidates.json")) ? JSON.parse(fs.readFileSync(path.join(a, "candidates.json"), "utf8")) : {};
   Object.assign(out, prev);
-  for (const [id, q] of Object.entries(QUERIES).filter(([id]) => !only || id === only)) {
-    const hits = (await search(q)).slice(0, 4);
+  for (const [id, q] of Object.entries(ACTIVE).filter(([id]) => !only || id === only)) {
+    const hits = (await search(q)).filter((h) => !USED.has(h.pageURL)).slice(0, 4);
     out[id] = hits.map((h) => ({
       id: h.id, pageURL: h.pageURL, user: h.user, tags: h.tags,
       webformatURL: h.webformatURL, largeImageURL: h.largeImageURL,
@@ -68,12 +99,13 @@ if (mode === "candidates") {
   const meta = {};
   for (const [id, idx] of Object.entries(choices)) {
     const c = cands[id][idx];
-    const file = `${id.replace("/", "--")}.jpg`;
+    const file = `${id.replace("/", "--")}${SUFFIX}.jpg`;
     await download(c.largeImageURL, path.join(dir, file));
     meta[id] = { src: `/images/lessons/${file}`, alt: c.tags, author: c.user, source: c.pageURL };
     console.log("saved", file);
   }
-  fs.writeFileSync("src/lib/lesson-photos.json", JSON.stringify(meta, null, 2) + "\n");
+  const prevMeta = fs.existsSync(META_FILE) ? JSON.parse(fs.readFileSync(META_FILE, "utf8")) : {};
+  fs.writeFileSync(META_FILE, JSON.stringify({ ...prevMeta, ...meta }, null, 2) + "\n");
 } else {
   console.log("usage: candidates <dir> | pick <candidates.json> <choices.json>");
 }
