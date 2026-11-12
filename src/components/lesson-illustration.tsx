@@ -1,6 +1,7 @@
 // Custom, theme-aware SVG diagrams that explain each track's core idea.
 import { Arrow, Box, C, type Node } from "@/components/illus-primitives";
 import { lessonDiagrams } from "@/components/lesson-diagrams";
+import { ExplainerPlayer } from "@/components/explainer-player";
 
 function Pipeline({ nodes, labels = [] }: { nodes: Omit<Node, "y">[]; labels?: string[] }) {
   const y = 128;
@@ -130,31 +131,38 @@ const diagrams: Record<string, { caption: string; body: React.ReactNode }> = {
 };
 
 export function LessonIllustration({ category, slug, title }: { category: string; slug: string; title: string }) {
-  const d = lessonDiagrams[`${category}/${slug}`] ?? diagrams[category] ?? diagrams["01-foundations"];
+  const lesson = lessonDiagrams[`${category}/${slug}`];
+  const d = lesson ?? diagrams[category] ?? diagrams["01-foundations"];
+  const steps = lesson?.steps ?? [];
+  const svg = (
+      <div className="illus overflow-hidden rounded-2xl border border-border">
+      <svg viewBox="0 0 800 300" role="img" aria-label={`${title} — diagram: ${d.caption}`} className="block w-full h-auto">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill={C.primary} />
+          </marker>
+          <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill={C.muted} />
+          </marker>
+          <filter id="shadow" x="-10%" y="-10%" width="120%" height="140%">
+            <feDropShadow dx="0" dy="4" stdDeviation="5" floodColor="#1e3a8a" floodOpacity="0.12" />
+          </filter>
+          <pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse">
+            <circle cx="2" cy="2" r="1" fill={C.border} />
+          </pattern>
+        </defs>
+        <rect width="800" height="300" fill={C.bg} />
+        <rect width="800" height="300" fill="url(#dots)" />
+        {d.body}
+      </svg>
+    </div>
+  );
+
   return (
     <figure className="not-prose my-8">
-      <div className="illus overflow-hidden rounded-2xl border border-border">
-        <svg viewBox="0 0 800 300" role="img" aria-label={`${title} — diagram: ${d.caption}`} className="block w-full h-auto">
-          <defs>
-            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M0,0 L10,5 L0,10 z" fill={C.primary} />
-            </marker>
-            <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M0,0 L10,5 L0,10 z" fill={C.muted} />
-            </marker>
-            <filter id="shadow" x="-10%" y="-10%" width="120%" height="140%">
-              <feDropShadow dx="0" dy="4" stdDeviation="5" floodColor="#1e3a8a" floodOpacity="0.12" />
-            </filter>
-            <pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse">
-              <circle cx="2" cy="2" r="1" fill={C.border} />
-            </pattern>
-          </defs>
-          <rect width="800" height="300" fill={C.bg} />
-          <rect width="800" height="300" fill="url(#dots)" />
-          {d.body}
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-xs text-muted-foreground">{d.caption}</figcaption>
+      {steps.length ? <ExplainerPlayer steps={steps} caption={d.caption}>{svg}</ExplainerPlayer> : svg}
+      {!steps.length && <figcaption className="mt-2 text-center text-xs text-muted-foreground">{d.caption}</figcaption>}
+      {steps.length > 0 && <figcaption className="sr-only">{d.caption}</figcaption>}
     </figure>
   );
 }
