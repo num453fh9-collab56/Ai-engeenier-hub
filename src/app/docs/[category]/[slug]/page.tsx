@@ -14,6 +14,12 @@ import { toPlain } from "@/lib/plain-text";
 import { LessonQuiz } from "@/components/lesson-quiz";
 import { LessonTutor } from "@/components/lesson-tutor";
 import { LessonComplete } from "@/components/lesson-complete";
+import { LessonIllustration } from "@/components/lesson-illustration";
+import { ShareButton } from "@/components/share-button";
+import { Breadcrumbs, KeyTakeaways, KeepGoing, RelatedLessons, splitTakeaways } from "@/components/lesson-extras";
+import { trackLabel } from "@/lib/tracks";
+import fs from "fs";
+import path from "path";
 
 interface PageProps {
   params: Promise<{ category: string; slug: string }>;
@@ -94,12 +100,34 @@ export default async function DocPage({ params }: PageProps) {
   const doc = getDocBySlug(category, slug);
 
   if (doc) {
-    const headings = extractHeadings(doc.content);
     const ordered = getAllDocs().sort(
       (a, b) => a.category.localeCompare(b.category) || a.order - b.order
     );
     const idx = ordered.findIndex((d) => d.category === category && d.slug === slug);
     const next = idx >= 0 ? ordered[idx + 1] : undefined;
+    const { body, takeaways } = splitTakeaways(doc.content);
+    const headings = extractHeadings(body);
+    const track = trackLabel(category);
+    const trackFirst = ordered.find((d) => d.category === category);
+    let updated = "";
+    try {
+      updated = fs
+        .statSync(path.join(process.cwd(), "content/docs", category, `${slug}.mdx`))
+        .mtime.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    } catch {}
+    // Same-track lessons first, then the next lessons in other tracks
+    const related = [
+      ...ordered.filter((d) => d.category === category && d.slug !== slug),
+      ...ordered.filter((d) => d.category !== category),
+    ]
+      .slice(0, 3)
+      .map((d) => ({
+        href: `/docs/${d.category}/${d.slug}`,
+        title: d.title,
+        description: d.description,
+        track: trackLabel(d.category),
+        difficulty: d.difficulty,
+      }));
     const rt = readingTime(doc.content);
 
     const jsonLd = {
@@ -124,43 +152,51 @@ export default async function DocPage({ params }: PageProps) {
       <div className="flex">
         <article className="flex-1 min-w-0 max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-          <header className="mb-8">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                {doc.category.replace(/^\d+-/, "").replace(/-/g, " ")}
-              </span>
-              <span className="text-muted-foreground/30">·</span>
-              <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                Deep Research
-              </span>
+          <header className="mb-6">
+            <Breadcrumbs
+              track={track}
+              trackHref={trackFirst ? `/docs/${trackFirst.category}/${trackFirst.slug}` : "/docs"}
+              title={doc.title}
+            />
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight leading-tight mb-3">{doc.title}</h1>
+            <p className="text-lg text-muted-foreground mb-4">{doc.description}</p>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-y border-border py-3">
+              <div className="flex items-center gap-3">
+                <span className="flex size-9 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                  AE
+                </span>
+                <div className="text-xs leading-tight">
+                  <p className="font-medium">AI Engineering Hub</p>
+                  <p className="text-muted-foreground">
+                    {updated ? `Updated ${updated} · ` : ""}
+                    {rt}
+                  </p>
+                </div>
+              </div>
+              <ShareButton title={doc.title} />
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-2">{doc.title}</h1>
-            <p className="text-muted-foreground">{doc.description}</p>
             <div className="flex items-center gap-2 mt-3 flex-wrap">
               {doc.difficulty && (
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${
                   doc.difficulty === "advanced"
                     ? "bg-destructive/10 text-destructive"
                     : doc.difficulty === "intermediate"
-                      ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                      : "bg-muted text-muted-foreground"
+                      ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                      : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                 }`}>
                   {doc.difficulty}
                 </span>
               )}
-              <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">{rt}</span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-primary/5 px-2.5 py-0.5 text-xs text-primary">
-                <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.51l-2.52 10a2 2 0 0 0 2 2.49H10Z"/><path d="M22 10v9a2 2 0 0 1-2 2h-6"/></svg>
-                Interactive Sandbox
-              </span>
               {doc.tags.map((tag: string) => (
                 <span key={tag} className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">{tag}</span>
               ))}
             </div>
           </header>
+          <LessonIllustration category={category} title={doc.title} />
+          <KeyTakeaways items={takeaways} />
           <div className="prose prose-zinc dark:prose-invert sm:prose-lg max-w-none prose-pre:overflow-x-auto prose-table:block prose-table:overflow-x-auto">
             <MDXRemote
-              source={doc.content}
+              source={body}
               components={mdxComponents}
               options={{
                 // Content is our own MDX, so allow JS expressions in props
@@ -182,6 +218,8 @@ export default async function DocPage({ params }: PageProps) {
             nextTitle={next?.title}
           />
           <LessonTutor title={doc.title} context={toPlain(doc.content).slice(0, 5000)} />
+          <KeepGoing trackCategory={category} />
+          <RelatedLessons items={related} />
           <Newsletter variant="compact" />
         </article>
         <TableOfContents headings={headings} />

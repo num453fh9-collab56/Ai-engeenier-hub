@@ -341,3 +341,10 @@ pre code > span::before {
 .prose :is(h1, h2, h3, h4) {
   scroll-margin-top: 6rem;
 }
+
+/* Lesson illustrations */
+:root { --illus-bg: #f3f7ff; }
+.dark { --illus-bg: #0d1530; }
+@keyframes illus-dash { to { stroke-dashoffset: -24; } }
+.illus-flow { stroke-dasharray: 8 4; animation: illus-dash 1.2s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .illus-flow { animation: none; } }

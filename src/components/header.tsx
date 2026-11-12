@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Radio, Workflow, BarChart3, BookText, Library, Route, FlaskConical, Trophy } from "lucide-react";
+import { Radio, Workflow, BarChart3, BookText, Library, Route, FlaskConical, Trophy, LayoutGrid } from "lucide-react";
 import { SearchCommand } from "@/components/search-command";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,12 @@ export function Header() {
             <Link href="/playground" aria-label="Playground">
               <FlaskConical className="size-3.5" />
               <span className="hidden md:inline">Playground</span>
+            </Link>
+          </Button>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/directory" aria-label="AI Tools Directory">
+              <LayoutGrid className="size-3.5" />
+              <span className="hidden md:inline">Directory</span>
             </Link>
           </Button>
           <Button variant="ghost" size="sm" asChild>
