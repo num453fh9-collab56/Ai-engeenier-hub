@@ -1,6 +1,6 @@
 ---
 title: "ReAct Agent Architecture & Tool Calling"
-description: "Implement the Reasoning + Acting (ReAct) pattern for LLM agents with structured tool calling and observability"
+description: "Build an agent from first principles: the Reason + Act loop, tool design, native function calling, stopping rules, guardrails and tracing — with a working agent you write yourself, no framework required."
 category: "03-agents"
 order: 1
 difficulty: "advanced"
@@ -13,171 +13,217 @@ tags:
 slug: "react-pattern"
 ---
 
-## Introduction
+## Why This Matters
 
-The ReAct (Reasoning + Acting) pattern is the foundation of modern LLM agents. It interleaves reasoning traces with tool calls, allowing the model to think, act, and observe in a loop.
+Ask a plain LLM *"What's the total value of my three most recent orders, converted to euros?"* and it can only guess — it has no access to your orders or today's exchange rate. Give it **tools** — `get_recent_orders`, `get_exchange_rate`, a calculator — and a loop that lets it use them step by step, and it can actually find the answer.
 
-## The ReAct Loop
+That loop is what people mean by an **agent**: a model that decides *what to do next*, does it through tools, looks at the result, and repeats until the job is done. The pattern was named **ReAct** (Reason + Act) by Yao et al. in 2022, and it's still the core of almost every agent framework, coding assistant and "AI employee" product.
 
-<Mermaid chart={`
-graph TD
-  Start["User Input"] --> Thought["Thought: Reason about state"]
-  Thought --> Action["Action: Call a tool"]
-  Action --> Observation["Observation: Tool result"]
-  Observation --> Thought
-  Observation --> Final["Final Answer"]
-  Final --> End["Output Response"]
+Agents are powerful, but they are also slower, more expensive and harder to control than a single LLM call. Knowing how the loop works — and where it breaks — is what lets you build agents that are reliable instead of impressive-in-a-demo.
 
-  style Start fill:#1e293b,stroke:#3b82f6
-  style Final fill:#1e293b,stroke:#22c55e
-  style End fill:#1e293b,stroke:#3b82f6
-`} />
+By the end of this lesson you will be able to:
 
-```
-Thought → Action → Observation → Thought → Action → Observation → Final Answer
-```
+- explain the Thought → Action → Observation loop and why it beats a single call for multi-step tasks,
+- design tools that models use correctly,
+- implement a complete agent loop with native function calling — no framework,
+- add stopping rules, guardrails and tracing so the agent is safe to run.
 
-Each cycle:
-1. **Thought**: The LLM reasons about the current state
-2. **Action**: The LLM calls a tool with specific arguments
-3. **Observation**: The tool result is fed back to the LLM
+## Workflows vs Agents: Choose Before You Build
 
-## Defining Tools
+Anthropic's widely cited guide *Building Effective Agents* draws a useful line:
 
-Tools are functions with typed signatures that the LLM can invoke:
+- **Workflows** — LLMs and tools orchestrated through **predefined code paths**. You decide the steps; the model fills them in. (Prompt chaining, routing and parallel calls are workflows.)
+- **Agents** — the LLM **dynamically directs its own process** and tool use. The model decides the steps.
+
+Their advice: start with the simplest solution that works. A single well-prompted call with retrieval is often enough; use a fixed workflow when the steps are known; reach for an agent only when the path genuinely can't be predicted — for example, debugging, research, or tasks where each step depends on what the last one found.
+
+| Use… | When |
+|---|---|
+| A single LLM call | The task needs no external data or one lookup you can do in code |
+| A workflow | The steps are known in advance (extract → classify → reply) |
+| An agent | The number and order of steps depend on intermediate results |
+
+## How the ReAct Loop Works
+
+The animated diagram at the top of this page shows one cycle:
+
+1. **Thought** — the model reasons about the goal and what it knows so far.
+2. **Action** — it chooses a tool and its arguments.
+3. **Observation** — your code runs the tool and returns the result to the model.
+4. **Repeat** — the new information feeds the next thought, until the model gives a **final answer** or a limit stops it.
+
+### Then and now
+
+The original ReAct paper had the model write plain text like `Thought: …`, `Action: search[query]`, and the program parsed that text. Modern APIs make this much more robust with **native function calling**: the model returns a structured tool call (name + JSON arguments), and you return a structured result. Reasoning models also think internally, so you rarely need to prompt for explicit "Thought:" lines. The loop is the same; the plumbing is safer.
+
+### Anatomy of an agent
+
+| Component | Job |
+|---|---|
+| **Model** | Decides the next step |
+| **Instructions** | Goal, rules, when to stop, what never to do |
+| **Tools** | Functions the model may call, each with a name, description and JSON Schema |
+| **Loop** | Sends the conversation, runs requested tools, appends results, repeats |
+| **Memory** | The growing list of messages and tool results (plus any long-term store) |
+| **Limits & guardrails** | Max steps, timeouts, permission checks, human approval for risky actions |
+
+## Designing Good Tools
+
+The model only knows your tools through their **names, descriptions and parameter schemas** — that text *is* the tool's prompt.
+
+- **One clear job per tool.** `get_order(order_id)` beats `database(query)`.
+- **Describe when to use it**, not just what it does: *"Use when the user asks about a specific order's status or contents."*
+- **Constrain arguments** with types, enums and required fields; use strict schemas when available.
+- **Return compact, structured results.** A short JSON object is easier for the model than a 5,000-line dump — and cheaper.
+- **Return helpful errors.** `{"error": "order 99 not found; order IDs are 4 digits"}` lets the model correct itself.
+- **Make dangerous actions explicit.** Separate read tools from write tools, and require confirmation for writes.
+
+## Hands-On: An Agent From Scratch
+
+This agent uses the OpenAI **Responses API** function-calling flow (the same flow covered in [Prompt Engineering](/docs/01-foundations/prompt-engineering)). It has two tools: a safe calculator and a small knowledge-base lookup.
+
+### Tools
 
 ```python
-from pydantic import BaseModel
+import ast, json, operator
 
-class SearchTool(BaseModel):
-    query: str
+# --- Tool 1: a calculator that evaluates arithmetic only (never use eval on model output!)
+_OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
+        ast.Div: operator.truediv, ast.Pow: operator.pow, ast.USub: operator.neg}
 
-class CalculatorTool(BaseModel):
-    expression: str
+def _eval(node):
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return node.value
+    if isinstance(node, ast.BinOp) and type(node.op) in _OPS:
+        return _OPS[type(node.op)](_eval(node.left), _eval(node.right))
+    if isinstance(node, ast.UnaryOp) and type(node.op) in _OPS:
+        return _OPS[type(node.op)](_eval(node.operand))
+    raise ValueError("only numbers and + - * / ** are allowed")
 
-def search(query: str) -> str:
-    """Simulate a web search."""
-    results = {"weather NYC": "72°F, partly cloudy"}
-    return results.get(query, "No results found.")
-
-def calculate(expression: str) -> str:
-    """Evaluate a mathematical expression."""
+def calculator(expression: str) -> str:
     try:
-        return str(eval(expression))
+        return json.dumps({"result": _eval(ast.parse(expression, mode="eval").body)})
     except Exception as e:
-        return f"Error: {e}"
+        return json.dumps({"error": str(e)})
+
+# --- Tool 2: a tiny knowledge base standing in for your database or search index
+KB = {
+    "order 4471": "Order 4471: 3 items, total 129.50 USD, status: in transit.",
+    "order 5120": "Order 5120: 1 item, total 42.00 USD, status: delivered.",
+    "usd to eur": "Exchange rate (example data): 1 USD = 0.92 EUR.",
+}
+
+def lookup(query: str) -> str:
+    hits = [v for k, v in KB.items() if k in query.lower()]
+    return json.dumps({"results": hits} if hits else {"error": "no match; try 'order <id>' or 'usd to eur'"})
+
+TOOLS = {"calculator": calculator, "lookup": lookup}
+
+TOOL_SCHEMAS = [
+    {"type": "function", "name": "calculator", "strict": True,
+     "description": "Evaluate an arithmetic expression. Use for any maths instead of computing in your head.",
+     "parameters": {"type": "object", "additionalProperties": False, "required": ["expression"],
+                    "properties": {"expression": {"type": "string", "description": "e.g. '(129.5 + 42) * 0.92'"}}}},
+    {"type": "function", "name": "lookup", "strict": True,
+     "description": "Look up facts about orders or exchange rates in the company knowledge base.",
+     "parameters": {"type": "object", "additionalProperties": False, "required": ["query"],
+                    "properties": {"query": {"type": "string", "description": "e.g. 'order 4471' or 'usd to eur'"}}}},
+]
 ```
 
-## Building the ReAct Agent
+### The loop
 
 ```python
 from openai import OpenAI
 
-client = OpenAI()
+client = OpenAI()        # reads OPENAI_API_KEY
+MODEL = "gpt-6-astra"    # any current model that supports function calling
 
-tools = [
-    {
-        "type": "function",
-        "function": {
-            "name": "search",
-            "description": "Search the web for information",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string"}
-                },
-                "required": ["query"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "calculate",
-            "description": "Perform a calculation",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "expression": {"type": "string"}
-                },
-                "required": ["expression"]
-            }
-        }
-    }
-]
-```
+INSTRUCTIONS = """You are an order-support agent.
+Use tools for every fact and every calculation; never guess numbers.
+When you have the answer, reply briefly and show the key numbers."""
 
-### The ReAct Loop Implementation
-
-```python
-def react_agent(user_query: str, max_steps: int = 5):
-    messages = [{"role": "user", "content": user_query}]
-    step = 0
-
-    while step < max_steps:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            tools=tools,
+def run_agent(question: str, max_steps: int = 6) -> str:
+    history = [{"role": "user", "content": question}]
+    for step in range(1, max_steps + 1):
+        response = client.responses.create(
+            model=MODEL, instructions=INSTRUCTIONS, tools=TOOL_SCHEMAS, input=history,
         )
+        history += response.output                           # keep the model's turn
+        calls = [item for item in response.output if item.type == "function_call"]
 
-        message = response.choices[0].message
-        messages.append(message)
+        if not calls:                                         # no tool requested → final answer
+            return response.output_text
 
-        if message.tool_calls:
-            for tool_call in message.tool_calls:
-                fn = tool_call.function
-                if fn.name == "search":
-                    result = search(fn.arguments["query"])
-                elif fn.name == "calculate":
-                    result = calculate(fn.arguments["expression"])
+        for call in calls:                                    # Action → Observation
+            args = json.loads(call.arguments)
+            tool = TOOLS.get(call.name)
+            result = tool(**args) if tool else json.dumps({"error": f"unknown tool {call.name}"})
+            print(f"[step {step}] {call.name}({args}) -> {result}")   # trace
+            history.append({"type": "function_call_output", "call_id": call.call_id, "output": result})
 
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": result,
-                })
-        else:
-            # No tool calls — final answer
-            return message.content
+    return "Stopped: step limit reached without a final answer."
 
-        step += 1
-
-    return "Max steps reached."
+print(run_agent("What is the combined total of orders 4471 and 5120 in euros?"))
 ```
 
-## Adding Observability
+A typical run prints a trace like:
 
-Track each step of the ReAct loop:
-
-```python
-class ReActLogger:
-    def __init__(self):
-        self.steps: list[dict] = []
-
-    def log(self, step: int, thought: str, action: str, observation: str):
-        self.steps.append({
-            "step": step,
-            "thought": thought,
-            "action": action,
-            "observation": observation,
-        })
-
-    def visualize(self):
-        for s in self.steps:
-            print(f"Step {s['step']}:")
-            print(f"  Thought: {s['thought']}")
-            print(f"  Action: {s['action']}")
-            print(f"  Observation: {s['observation']}")
+```text
+[step 1] lookup({'query': 'order 4471'}) -> {"results": ["Order 4471: 3 items, total 129.50 USD, ..."]}
+[step 1] lookup({'query': 'order 5120'}) -> {"results": ["Order 5120: 1 item, total 42.00 USD, ..."]}
+[step 2] lookup({'query': 'usd to eur'}) -> {"results": ["Exchange rate (example data): 1 USD = 0.92 EUR."]}
+[step 3] calculator({'expression': '(129.5 + 42) * 0.92'}) -> {"result": 157.78}
+The two orders total 171.50 USD, which is about 157.78 EUR.
 ```
+
+(The exact steps vary between runs — that's normal for agents.) Notice the model requested **two tools in one step**: modern models can call tools in parallel, and the `call_id` keeps each result matched to its request.
+
+## Mini Project: Your Own Research Assistant
+
+Extend the agent into something useful:
+
+1. **Replace the toy KB** with a real tool — for example a `search_docs(query)` that runs the hybrid search from the [Hybrid Search](/docs/02-rag/hybrid-search) lesson over your own notes.
+2. **Add a `save_note(title, text)` write tool** and require the agent to ask *"Shall I save this?"* first; only call it when the user answers yes.
+3. **Log every step** (tool name, arguments, result size, tokens used) to a JSON-lines file.
+4. **Write 10 test tasks** with known answers and record: success, number of steps, and total tokens. This is your agent's report card.
+
+**Stretch goals**
+
+1. Add a per-run budget: stop if total tokens exceed a limit.
+2. Detect loops: if the same tool is called with the same arguments twice, tell the model and ask it to try something else.
+3. Rebuild the same agent with a framework (OpenAI Agents SDK, LangGraph or similar) and compare: what did the framework give you, and what did it hide?
+
+## Common Mistakes
+
+1. **Building an agent when a workflow would do.** If you can write the steps down, code them — it's cheaper, faster and testable.
+2. **No step limit.** Agents can loop forever, burning money. Always cap steps and time.
+3. **Vague tool descriptions.** The model can't read your mind — or your code. Describe purpose, inputs and when to use each tool.
+4. **Using `eval` or shell commands on model output.** That's remote code execution. Validate and sandbox everything.
+5. **Huge tool outputs.** Dumping whole documents into the context slows the agent and drowns the signal. Return summaries or top results.
+6. **Silent tool errors.** Returning nothing (or crashing) leaves the model stuck. Return clear error messages it can act on.
+7. **No tracing.** When an agent fails, the final answer tells you nothing. You need the step-by-step trace.
+
+## Production Tips
+
+- **Trace everything.** Record each step's input, tool calls, results, latency and tokens; observability tools (LangSmith, Langfuse, Phoenix and others in the [AI Tools Directory](/directory)) make this easy.
+- **Put permissions in code.** The tool function checks *who* is asking and *what* they're allowed to do — never rely on the prompt.
+- **Human-in-the-loop for irreversible actions:** payments, emails, deletions, deployments.
+- **Set budgets:** max steps, max tokens, max wall-clock time per task.
+- **Evaluate on task suites**, not single demos: success rate, average steps and cost per task, tracked over time.
+- **Prefer small, composable tools** and a capable model for planning; route simple sub-tasks to cheaper models.
 
 ## Key Takeaways
 
-- ReAct interleaves reasoning traces with tool execution for transparent agent behavior
-- Structured tool definitions (typed parameters) reduce parsing errors
-- Always cap the number of ReAct steps to prevent infinite loops
-- Observability is critical — log every Thought/Action/Observation cycle
+- An agent is a loop: the model reasons, calls a tool, observes the result and repeats until it can answer.
+- Start simple — single calls and fixed workflows beat agents whenever the steps are predictable.
+- Tools are prompts: clear names, descriptions, strict schemas, compact results and helpful errors.
+- Native function calling replaces fragile text parsing; `call_id` matches results to requests, even for parallel calls.
+- Production agents need step limits, budgets, permission checks in code, human approval for risky actions, and full tracing.
 
-## Next Steps
+## Further Reading
 
-Dive into Fine-Tuning to learn how to customize models for your specific agent tasks.
+- Yao et al., *ReAct: Synergizing Reasoning and Acting in Language Models* — [arXiv:2210.03629](https://arxiv.org/abs/2210.03629)
+- Anthropic, *Building Effective Agents* (Dec 2024) — [anthropic.com](https://www.anthropic.com/engineering/building-effective-agents)
+- [OpenAI: Function calling guide](https://developers.openai.com/api/docs/guides/function-calling)
+- Next lesson: [Multi-Agent Swarms & Delegation](/docs/03-agents/swarms)

@@ -1,6 +1,6 @@
 ---
 title: "Multi-Agent Swarms & Delegation"
-description: "Design agent communication, task decomposition, and consensus mechanisms for multi-agent systems."
+description: "When several cooperating agents beat one — and when they don't. Learn the core multi-agent patterns (orchestrator-workers, parallel voting, handoffs, critic loops), how agents should communicate, and build an orchestrator with parallel workers."
 category: "03-agents"
 order: 2
 difficulty: "advanced"
@@ -13,62 +13,225 @@ tags:
 slug: "swarms"
 ---
 
-## Introduction
+## Why This Matters
 
-Multi-agent systems coordinate multiple LLM agents to solve complex tasks through decomposition, delegation, and consensus.
+Ask one agent to *"write a market report on electric scooters in Southeast Asia: competitors, regulations and pricing"* and it works through everything in one long, sequential conversation. Its context fills with search results about regulations while it's trying to compare prices; it forgets earlier findings; it takes a long time.
 
-## Agent Communication Patterns
+A **multi-agent system** splits the job the way a human team would: a lead plans the work, specialists research competitors, regulations and pricing **in parallel**, each with a clean context, and the lead combines their findings.
 
-<Mermaid chart={`
-graph LR
-    Coordinator["Coordinator Agent"] --> Worker1["Worker 1"]
-    Coordinator --> Worker2["Worker 2"]
-    Coordinator --> Worker3["Worker 3"]
-    Worker1 --> Validator["Validator Agent"]
-    Worker2 --> Validator
-    Worker3 --> Validator
-    Validator --> Coordinator
-`} />
+This can work remarkably well. Anthropic reported that its multi-agent research system (a lead agent coordinating parallel subagents) **outperformed a single agent by 90.2%** on its internal research evaluation. The same report is honest about the price: multi-agent systems used **about 15× more tokens** than ordinary chat interactions.
 
-## Task Decomposition
+That trade-off is the whole lesson. Multi-agent designs are a tool for specific problems — not an upgrade to apply everywhere.
+
+By the end of this lesson you will be able to:
+
+- decide when multiple agents help and when they hurt,
+- apply the main patterns: orchestrator-workers, parallel voting, handoffs and critic loops,
+- design clear task briefs and message formats between agents,
+- build an orchestrator that runs worker agents in parallel and merges their results.
+
+## When Multi-Agent Helps — and When It Doesn't
+
+**Good fits** (high value, naturally parallel):
+
+- Broad research where sub-questions are **independent** (competitors vs regulations vs pricing).
+- Tasks whose information is **too large for one context window**.
+- Work that benefits from **independent perspectives** — several drafts, then pick or merge the best.
+- Pipelines where a separate **reviewer** catches the generator's mistakes.
+
+**Poor fits:**
+
+- Tasks where every agent needs the **same shared context**, or with many **dependencies** between steps — coordination overhead eats the benefit. Anthropic notes most coding tasks have fewer truly parallel parts than research.
+- Simple or low-value tasks, where 15× the tokens isn't justified.
+- Anything you can do with a **fixed workflow** or a single agent (see [ReAct Agent Architecture](/docs/03-agents/react-pattern)).
+
+A practical rule: **build a single agent first.** Split into multiple agents only when you can point to the bottleneck — context overload, slow sequential work, or missing review.
+
+## Core Patterns
+
+The animated diagram at the top of this page shows the most common one, orchestrator-workers. Here are the main patterns you'll combine:
+
+| Pattern | How it works | Best for |
+|---|---|---|
+| **Orchestrator–workers** | A lead agent decomposes the goal, delegates sub-tasks to workers, then synthesizes their results | Open-ended research, reports, analysis |
+| **Parallel sectioning** | A fixed set of independent sub-tasks runs at the same time | Known, independent parts (e.g. review code for security *and* style) |
+| **Parallel voting** | The same task runs several times; results are aggregated by majority or a judge | Classification, safety checks, reducing random errors |
+| **Handoffs / routing** | A triage agent passes the conversation to the right specialist | Customer service (billing vs tech support vs sales) |
+| **Generator–critic loop** | One agent drafts, another critiques against criteria, repeat until good enough | Writing, code, translations with clear quality criteria |
+| **Debate** | Agents propose answers, read each other's reasoning and revise | Hard reasoning questions where independent checks help |
+
+Orchestrator-workers, parallelization and the generator–critic ("evaluator-optimizer") loop are all described in Anthropic's *Building Effective Agents* guide; multi-agent debate was studied by Du et al. (2023).
+
+## Communication: How Agents Talk
+
+Most multi-agent failures are communication failures. Two decisions matter most.
+
+### 1. What does each agent see?
+
+- **Message passing (isolated contexts):** each worker receives only its brief and returns only its result. Contexts stay small and focused — this is a key reason orchestrator-workers works.
+- **Shared state (blackboard):** agents read and write a common store (a document, a task list, a database). Useful for long-running collaboration, but needs clear ownership rules to avoid overwrites and confusion.
+
+### 2. What is in a delegation brief?
+
+Vague delegation (*"research regulations"*) leads to duplicated work, gaps and wandering. A good brief, like a good ticket for a colleague, includes:
+
+- **Objective** — the specific question to answer.
+- **Scope and boundaries** — what to include and what another agent is already covering.
+- **Output format** — e.g. *"5–8 bullet points with a source for each, plus a list of open questions."*
+- **Tools and effort** — which tools to use and roughly how much work is expected.
+
+Ask workers to return **structured output** (see [Python Async & Structured Outputs](/docs/01-foundations/intro)) so the orchestrator can merge results reliably.
+
+### Consensus and aggregation
+
+When agents disagree, decide how to combine them **in code**, not by hope:
+
+- **Majority vote** for discrete answers (labels, yes/no).
+- **Judge / aggregator agent** that compares candidates against explicit criteria.
+- **Confidence + escalation:** if agreement is low, send the case to a human.
+
+## Hands-On: An Orchestrator with Parallel Workers
+
+This example uses the OpenAI Responses API (`responses.parse` for the structured plan, `responses.create` for free text) and `asyncio` to run workers concurrently.
 
 ```python
-from pydantic import BaseModel
+# pip install openai pydantic
+import asyncio
+from pydantic import BaseModel, Field
+from openai import AsyncOpenAI
 
-class Task(BaseModel):
-    id: str
-    description: str
-    dependencies: list[str]
-    assigned_to: str | None = None
+client = AsyncOpenAI()      # reads OPENAI_API_KEY
+MODEL = "gpt-6-astra"       # any current model; use a cheaper one for workers if you like
 
-class Decomposition(BaseModel):
-    tasks: list[Task]
-    parallel_groups: list[list[str]]
+class SubTask(BaseModel):
+    title: str
+    brief: str = Field(description="Objective, scope boundaries and expected output format for this worker")
 
-def decompose(goal: str) -> Decomposition:
-    """Split a complex goal into dependent and parallel tasks."""
-    # LLM call to decompose
-    pass
+class Plan(BaseModel):
+    subtasks: list[SubTask] = Field(description="2 to 4 independent sub-tasks that can run in parallel")
+
+async def make_plan(goal: str) -> Plan:
+    r = await client.responses.parse(
+        model=MODEL,
+        input=[
+            {"role": "system", "content": "You are a lead analyst. Split the goal into 2-4 independent, "
+                                          "non-overlapping sub-tasks. Write a precise brief for each."},
+            {"role": "user", "content": goal},
+        ],
+        text_format=Plan,
+    )
+    return r.output_parsed
+
+async def run_worker(task: SubTask) -> str:
+    r = await client.responses.create(
+        model=MODEL,
+        instructions="You are a specialist. Do ONLY your sub-task. Answer in 5-8 bullet points "
+                     "and finish with a line 'Uncertain:' listing anything you are not sure about.",
+        input=f"Sub-task: {task.title}\n\nBrief: {task.brief}",
+    )
+    return r.output_text
+
+async def synthesize(goal: str, results: list[tuple[SubTask, str]]) -> str:
+    findings = "\n\n".join(f"## {t.title}\n{out}" for t, out in results)
+    r = await client.responses.create(
+        model=MODEL,
+        instructions="You are the lead analyst. Merge the specialists' findings into one clear report. "
+                     "Resolve overlaps, flag contradictions, and keep every 'Uncertain' item visible.",
+        input=f"Goal: {goal}\n\nFindings:\n{findings}",
+    )
+    return r.output_text
+
+async def run_team(goal: str) -> str:
+    plan = await make_plan(goal)
+    for t in plan.subtasks:
+        print("delegating:", t.title)
+    outputs = await asyncio.gather(*(run_worker(t) for t in plan.subtasks), return_exceptions=True)
+    done = [(t, o) for t, o in zip(plan.subtasks, outputs) if isinstance(o, str)]
+    failed = [t.title for t, o in zip(plan.subtasks, outputs) if not isinstance(o, str)]
+    report = await synthesize(goal, done)
+    return report + (f"\n\n(Missing sections: {', '.join(failed)})" if failed else "")
+
+print(asyncio.run(run_team("Brief report: should a small online shop add a chatbot in 2026? "
+                           "Cover costs, customer expectations and risks.")))
 ```
 
-## Consensus Mechanism
+Points to notice:
+
+- **The plan is structured**, so the program — not the model — controls how many workers run.
+- **Workers run concurrently** with `asyncio.gather`; total time is roughly the slowest worker, not the sum.
+- **One failed worker doesn't sink the run** (`return_exceptions=True`), and the report says what's missing.
+- **Workers here use only the model's own knowledge.** For real research, give them tools such as web or document search (the agent loop from the previous lesson) — and expect more tokens.
+
+### Parallel voting in ten lines
 
 ```python
-async def reach_consensus(
-    agents: list[str],
-    proposal: str,
-) -> str:
-    votes = await asyncio.gather(*[
-        query_agent(agent, f"Approve or reject: {proposal}")
-        for agent in agents
-    ])
-    approvals = sum(1 for v in votes if "approve" in v.lower())
-    return "approved" if approvals > len(agents) / 2 else "rejected"
+from collections import Counter
+from typing import Literal
+
+class Verdict(BaseModel):
+    label: Literal["safe", "unsafe"]
+
+async def judge_once(text: str) -> str:
+    r = await client.responses.parse(
+        model=MODEL,
+        input=[{"role": "system", "content": "Classify the message as safe or unsafe for a kids' app."},
+               {"role": "user", "content": text}],
+        text_format=Verdict,
+    )
+    return r.output_parsed.label
+
+async def vote(text: str, n: int = 5) -> tuple[str, float]:
+    labels = await asyncio.gather(*(judge_once(text) for _ in range(n)))
+    label, count = Counter(labels).most_common(1)[0]
+    return label, count / n          # e.g. ("unsafe", 0.8) → low agreement could go to a human
 ```
+
+## Mini Project: A Research Team with a Reviewer
+
+Turn the orchestrator into a small "research desk":
+
+1. Start with `run_team` above.
+2. Add a **reviewer agent** that reads the final report and returns structured feedback: `approved: bool` and a list of `issues` (unsupported claims, missing sections, contradictions).
+3. If not approved, send the issues back to the lead to revise — at most **2 revision rounds** (a generator–critic loop with a hard limit).
+4. Log for every run: number of workers, tokens per agent, total time, and whether the reviewer approved.
+5. Compare with a **single-agent baseline** that answers the same goal in one call. Is the team's report actually better? Is it worth the extra tokens and time?
+
+**Stretch goals**
+
+1. Give workers a search tool (for example, your hybrid search over a document folder) and require a source for every bullet.
+2. Route easy sub-tasks to a cheaper model and keep the strongest model for planning and review.
+3. Add a triage step that decides *whether* to use the team at all — simple questions go straight to a single call.
+
+## Common Mistakes
+
+1. **Going multi-agent first.** Without a single-agent baseline you can't show the extra cost buys anything.
+2. **Vague briefs.** Workers duplicate each other or miss parts. Spell out objective, boundaries and output format.
+3. **Unbounded loops between agents.** Critic loops and debates need hard round limits and budgets.
+4. **Agents chatting in free text.** Use structured outputs for plans, results and verdicts so code can check them.
+5. **No failure handling.** One timeout shouldn't kill the run; collect errors and report gaps.
+6. **Passing everything to everyone.** Sharing full histories bloats contexts and costs. Pass only what each agent needs.
+7. **No tracing per agent.** With several agents, you must see each one's inputs, outputs and tokens to debug anything.
+
+## Production Tips
+
+- **Budget per run:** cap total tokens, wall-clock time and number of spawned agents.
+- **Trace the tree:** log each agent's run with a parent ID so you can replay who delegated what to whom.
+- **Use different models per role:** strong models for planning and review, cheaper ones for routine sub-tasks.
+- **Make results deterministic where possible:** structured outputs, low temperature for judges, majority voting for critical decisions.
+- **Evaluate end-to-end and per role:** task success rate and cost per task overall, plus quality checks on planner and worker outputs.
+- **Frameworks help with plumbing** — handoffs, state, retries, tracing. OpenAI Agents SDK, LangGraph, CrewAI and AutoGen are compared in the [AI Tools Directory](/directory). Understand the raw pattern first, as you did here.
 
 ## Key Takeaways
 
-- Use a coordinator agent for task decomposition and result aggregation
-- Implement validator agents for cross-checking outputs
-- Design clear communication protocols between agents
-- Always include human-in-the-loop for critical decisions
+- Multiple agents can beat one on broad, parallelizable work — Anthropic reported a 90.2% improvement on its research eval — but at a large token cost (about 15× a chat).
+- Start with a single agent or a fixed workflow; split only when you can name the bottleneck.
+- Core patterns: orchestrator–workers, parallel sectioning and voting, handoffs, generator–critic loops and debate.
+- Clear delegation briefs and structured messages prevent most multi-agent failures.
+- Production systems need budgets, round limits, failure handling and per-agent tracing.
+
+## Further Reading
+
+- Anthropic, *How we built our multi-agent research system* (June 2025) — [anthropic.com](https://www.anthropic.com/engineering/multi-agent-research-system)
+- Anthropic, *Building Effective Agents* (Dec 2024) — [anthropic.com](https://www.anthropic.com/engineering/building-effective-agents)
+- Du et al., *Improving Factuality and Reasoning in Language Models through Multiagent Debate* — [arXiv:2305.14325](https://arxiv.org/abs/2305.14325)
+- Previous lesson: [ReAct Agent Architecture & Tool Calling](/docs/03-agents/react-pattern)
