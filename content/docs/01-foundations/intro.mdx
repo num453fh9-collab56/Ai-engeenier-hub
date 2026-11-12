@@ -1,129 +1,235 @@
 ---
 title: "Python Async & Structured Outputs in LLMs"
-description: "Learn how to leverage Python's async capabilities and structured output parsing with LLMs using Pydantic and instructor"
+description: "Turn unpredictable LLM text into validated Python objects with Pydantic and Structured Outputs, then process hundreds of requests concurrently with asyncio — safely, within rate limits."
 category: "01-foundations"
 order: 1
 difficulty: "intermediate"
 tags:
   - python
   - async
-  - structured-outputs
   - pydantic
-  - instructor
+  - structured-outputs
+  - openai
 slug: "intro"
 ---
 
-## Introduction
+## Why This Matters
 
-Modern LLM applications demand more than simple text responses. We need structured, type-safe outputs and concurrent request handling to build production-grade systems.
+Your manager hands you 500 customer emails and asks for a spreadsheet: customer name, order number, problem category and urgency. An LLM can read each email and pull out those fields. Two practical problems appear immediately:
 
-In this tutorial, we'll explore:
+1. **The output is text.** One reply says `Order: #4471`, the next says `order number is 4471`, a third wraps everything in a friendly sentence. Your code needs a clean `order_id: int`, every time.
+2. **It's slow.** If each call takes about 2–3 seconds and you make them one after another, 500 emails take 20+ minutes. Most of that time your program is simply *waiting* for the network.
 
-- **Structured Outputs**: Parsing LLM responses into typed Pydantic models
-- **Async Python**: Using `asyncio` for concurrent LLM requests
-- **The `instructor` Library**: A powerful wrapper for structured outputs
+This lesson fixes both. **Structured Outputs** make the model return data that matches a schema you define, and **Pydantic** turns it into a typed Python object. **asyncio** lets you run many requests at the same time, so the waiting overlaps. Together they are the backbone of almost every LLM pipeline you'll build: extraction, classification, routing, evaluation and agents.
 
-## Why Structured Outputs?
+By the end of this lesson you will be able to:
 
-Raw LLM responses are strings. To build reliable software, you need structured data:
+- define output schemas with Pydantic,
+- get schema-valid responses from an LLM instead of free text,
+- run hundreds of LLM calls concurrently with a safe concurrency limit,
+- handle rate limits, timeouts, refusals and validation errors properly.
 
-```python
-# Raw response — fragile and unpredictable
-response = llm.complete("Extract: John is 30 years old")
-# "The person's name is John and they are 30 years old."
+## Core Concepts
 
-# Structured response — type-safe and predictable
-class Person(BaseModel):
-    name: str
-    age: int
+### 1. Three ways to get structured data from an LLM
 
-person = extract_person("John is 30 years old")
-# Person(name="John", age=30)
-```
+| Approach | How it works | Reliability |
+|---|---|---|
+| **Prompt + parse** | Ask for JSON in the prompt, then `json.loads` the text | Fragile — missing fields, extra prose, wrong types |
+| **JSON mode** | The API guarantees valid JSON | Valid JSON, but not necessarily *your* fields |
+| **Structured Outputs** | You send a JSON Schema; generation is constrained to match it | Output matches your schema (unless the model refuses) |
 
-### The Problem with Prompting
+Structured Outputs is the right default for production. You don't write the JSON Schema by hand — the SDK generates it from a Pydantic model.
 
-Without structured output, you rely on prompt engineering to get consistent JSON. This approach is brittle — small prompt changes can break your parsing logic.
+### 2. Pydantic: your schema as a Python class
 
-## Setting Up Async Client
-
-Let's build an async LLM client using OpenAI and `instructor`:
+**Pydantic** describes data with type hints and validates it at runtime:
 
 ```python
-import instructor
-from openai import AsyncOpenAI
-from pydantic import BaseModel
+from typing import Literal
+from pydantic import BaseModel, Field
 
-client = instructor.from_openai(AsyncOpenAI())
-
-class ExtractResult(BaseModel):
-    entities: list[str]
-    sentiment: str
-    confidence: float
-
-async def extract_entities(text: str) -> ExtractResult:
-    return await client.chat.completions.create(
-        model="gpt-4o",
-        response_model=ExtractResult,
-        messages=[
-            {"role": "user", "content": f"Analyze: {text}"}
-        ],
-    )
+class SupportTicket(BaseModel):
+    customer_name: str
+    order_id: int | None = Field(description="Order number if mentioned, otherwise null")
+    category: Literal["delivery", "payment", "refund", "account", "other"]
+    urgency: Literal["low", "medium", "high"]
+    summary: str = Field(description="One sentence summary of the problem")
 ```
 
-### Batch Processing with asyncio
+Each part helps the model:
 
-The real power comes when you process many items concurrently:
+- **Types** (`int`, `str`) stop `"4471"` vs `4471` confusion.
+- **`Literal`** restricts a field to fixed choices — perfect for categories.
+- **`Field(description=...)`** becomes part of the schema, so it works like a mini-instruction for that field.
+- **`int | None`** lets the model say "not present" instead of inventing a value.
+
+You can also validate any JSON yourself, with or without an LLM:
 
 ```python
-async def process_batch(texts: list[str]) -> list[ExtractResult]:
-    tasks = [extract_entities(text) for text in texts]
-    return await asyncio.gather(*tasks)
-
-# Process 50 documents concurrently
-texts = load_documents()
-results = await process_batch(texts)
+ticket = SupportTicket.model_validate_json(raw_json_string)  # raises ValidationError if wrong
 ```
 
-## Advanced: Streaming Structured Outputs
+### 3. Async: overlapping the waiting
 
-You can stream structured outputs for real-time UX:
+LLM calls are **I/O-bound**: your CPU does almost nothing while the request travels to the server and back. Python's `asyncio` runs many such waits concurrently on a single thread:
+
+- `async def` defines a coroutine; `await` pauses it until a result arrives, letting other coroutines run meanwhile.
+- `asyncio.gather(...)` starts many coroutines and waits for all of them.
+- `asyncio.Semaphore(n)` caps how many run at once — essential, because APIs enforce **rate limits** on requests and tokens per minute.
+
+With 10 requests in flight, 500 emails that took 20+ minutes sequentially can finish in a few minutes. Total time is roughly the number of batches × the slowest call, not the sum of all calls.
+
+### 4. What can go wrong
+
+| Problem | What you see | How to handle it |
+|---|---|---|
+| Rate limit | HTTP 429 | Lower concurrency; retry with backoff (the OpenAI SDK retries some errors automatically via `max_retries`) |
+| Timeout / network error | Exceptions after a delay | Set a `timeout`, retry a limited number of times |
+| Refusal | No parsed object; a refusal message instead | Check before using the result; log it |
+| Truncated output | Response marked incomplete (token limit reached) | Raise the output limit or shorten the input |
+| Wrong content | Valid schema, wrong facts | Evaluate on a test set — schemas guarantee shape, not truth |
+
+## Hands-On: Structured Outputs Step by Step
+
+The examples use the official OpenAI Python SDK and the **Responses API**, following OpenAI's current Structured Outputs guide. Set your key in the environment first (`OPENAI_API_KEY`) — never hard-code it.
+
+### One email → one validated object
 
 ```python
-async def stream_classification(text: str):
-    async for chunk in client.chat.completions.create(
-        model="gpt-4o",
-        response_model=ExtractResult,
-        stream=True,
-        messages=[{"role": "user", "content": text}],
-    ):
-        yield chunk  # Partial ExtractResult objects
+# pip install openai pydantic
+from openai import OpenAI
+
+client = OpenAI()          # reads OPENAI_API_KEY from the environment
+MODEL = "gpt-6-astra"      # any current model that supports Structured Outputs
+
+email = """Hi, I'm Sara Khan. My order #4471 still hasn't arrived after two weeks
+and I need it for my sister's wedding on Friday!"""
+
+response = client.responses.parse(
+    model=MODEL,
+    input=[
+        {"role": "system", "content": "Extract the support ticket fields from the email."},
+        {"role": "user", "content": email},
+    ],
+    text_format=SupportTicket,
+)
+
+ticket = response.output_parsed      # a SupportTicket instance (None if the model refused)
+if ticket is None:
+    print("Model refused or returned no parsed output")
+else:
+    print(ticket.order_id, ticket.category, ticket.urgency)
+    # 4471 delivery high
 ```
 
-## Error Handling & Retries
+Notice there is no `json.loads` and no string cleanup — `ticket.order_id` is already an `int`.
 
-Production code needs robust error handling:
+### Many emails, concurrently and politely
 
 ```python
 import asyncio
-from tenacity import retry, stop_after_attempt, wait_exponential
+from openai import AsyncOpenAI
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
-async def safe_extract(text: str) -> ExtractResult:
-    try:
-        return await extract_entities(text)
-    except Exception as e:
-        print(f"Extraction failed: {e}")
-        raise
+aclient = AsyncOpenAI(max_retries=3, timeout=30)   # SDK retries some transient errors
+limit = asyncio.Semaphore(10)                       # at most 10 requests in flight
+
+async def extract(email: str) -> SupportTicket | None:
+    async with limit:
+        response = await aclient.responses.parse(
+            model=MODEL,
+            input=[
+                {"role": "system", "content": "Extract the support ticket fields from the email."},
+                {"role": "user", "content": email},
+            ],
+            text_format=SupportTicket,
+        )
+        return response.output_parsed
+
+async def extract_all(emails: list[str]) -> list[SupportTicket | None | Exception]:
+    # return_exceptions=True: one failure doesn't cancel the whole batch
+    return await asyncio.gather(*(extract(e) for e in emails), return_exceptions=True)
+
+results = asyncio.run(extract_all(emails))
+ok = [r for r in results if isinstance(r, SupportTicket)]
+failed = [(i, r) for i, r in enumerate(results) if not isinstance(r, SupportTicket)]
+print(f"{len(ok)} parsed, {len(failed)} need attention")
 ```
+
+Three details make this production-ready:
+
+1. **The semaphore** keeps you under rate limits no matter how long the list is.
+2. **`return_exceptions=True`** collects errors instead of crashing on the first one.
+3. **Results keep their order**, so `results[i]` always belongs to `emails[i]` — you can retry exactly the failures.
+
+## Mini Project: Support Inbox → Spreadsheet
+
+Build a script that turns a folder of emails into a clean CSV.
+
+1. Create `emails/` with 10–20 `.txt` files. Mix in messy cases: no order number, two problems in one email, a polite email that is actually urgent, and one that isn't a support request at all.
+2. Load them, run `extract_all`, and write a CSV with `pandas`:
+
+```python
+from pathlib import Path
+import pandas as pd
+
+files = sorted(Path("emails").glob("*.txt"))
+emails = [f.read_text(encoding="utf-8") for f in files]
+results = asyncio.run(extract_all(emails))
+
+rows = []
+for f, r in zip(files, results):
+    if isinstance(r, SupportTicket):
+        rows.append({"file": f.name, **r.model_dump(), "error": ""})
+    else:
+        rows.append({"file": f.name, "error": repr(r)})
+
+pd.DataFrame(rows).to_csv("tickets.csv", index=False)
+print("Saved tickets.csv")
+```
+
+3. Open the CSV and check every row by hand. Where was the model wrong? Was the schema unclear?
+4. Improve the schema descriptions (not the prompt) and run again. Did accuracy improve?
+
+**No API key yet?** Practise the validation half offline: write five JSON strings by hand (some valid, some with a wrong type or missing field) and call `SupportTicket.model_validate_json` on each. Read the `ValidationError` messages — they are exactly what your pipeline will log in production.
+
+**Stretch goals**
+
+1. Add a `confidence: Literal["low", "medium", "high"]` field and send low-confidence rows to a human review list.
+2. Time the run with 1, 5 and 20 concurrent requests. Where does speed stop improving (or errors start)?
+3. Add a `language` field and test emails in Urdu or Arabic.
+
+## Common Mistakes
+
+1. **Parsing free text with regex.** It works in the demo and breaks in production. Use Structured Outputs and a schema.
+2. **No concurrency limit.** `gather` over 5,000 requests at once triggers instant rate limiting. Always use a semaphore (or a queue).
+3. **Calling `asyncio.run` inside a running event loop.** In Jupyter notebooks, use `await extract_all(emails)` directly instead.
+4. **Ignoring refusals and partial results.** `output_parsed` can be `None`; check it before use.
+5. **Forcing a value that may not exist.** Without `| None`, the model must invent an order number. Make optional things optional.
+6. **Huge, vague schemas.** Thirty loosely described fields confuse the model. Keep schemas focused; split into two calls if needed.
+7. **Trusting the shape as truth.** A valid `SupportTicket` can still contain the wrong category. Spot-check and evaluate.
+
+## Production Tips
+
+- **Log the raw response and the parsed object** together, with the model name and prompt version, so you can debug any row later.
+- **Version your schemas.** When you add or rename a field, bump a version and keep old data readable.
+- **Be idempotent.** Store results keyed by input ID, and skip inputs already processed when re-running after a crash.
+- **Watch cost.** Every field description and example adds tokens to every call — keep them short and useful.
+- **Use a batch API for huge, non-urgent jobs.** Many providers offer cheaper asynchronous batch processing when results aren't needed right away.
+- **Test with an evaluation set.** Keep 30–50 labelled emails and measure accuracy per field whenever you change the model, schema or prompt (see [RAG Evaluation](/docs/02-rag/rag-eval) for the same idea applied to RAG).
 
 ## Key Takeaways
 
-- Structured outputs turn LLM responses into type-safe, validated data
-- Async Python with `asyncio.gather` dramatically improves throughput
-- The `instructor` library bridges the gap between LLMs and Pydantic
-- Always implement retry logic for production reliability
+- LLMs produce text; Structured Outputs plus a Pydantic schema turn it into validated, typed Python objects.
+- Use `Literal` for fixed choices, `Field(description=...)` as per-field instructions, and `| None` for values that may be missing.
+- LLM calls are I/O-bound — `asyncio.gather` overlaps the waiting, and a `Semaphore` keeps you within rate limits.
+- Handle failures explicitly: retries with limits, `return_exceptions=True`, refusals and incomplete outputs.
+- A valid schema guarantees the shape, not the truth — always evaluate accuracy on real examples.
 
-## Next Steps
+## Further Reading
 
-Explore our RAG module to see how structured extraction feeds into retrieval-augmented generation pipelines.
+- [OpenAI: Structured Outputs guide](https://developers.openai.com/api/docs/guides/structured-outputs)
+- [Pydantic documentation](https://docs.pydantic.dev/latest/)
+- [Python documentation: asyncio](https://docs.python.org/3/library/asyncio.html)
+- [OpenAI Python SDK on GitHub](https://github.com/openai/openai-python)
+- Next lesson: [Prompt Engineering & Structured Outputs](/docs/01-foundations/prompt-engineering)

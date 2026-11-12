@@ -1,90 +1,202 @@
 ---
 title: "Transformers: From Attention to GPT"
-description: "Implement multi-head attention, positional encoding, and causal language modeling from scratch."
+description: "Understand what really happens inside an LLM: tokens, embeddings, self-attention, multi-head attention, the causal mask, and how next-token sampling works — with attention built from scratch in NumPy and a real GPT-2 experiment."
 category: "01-foundations"
 order: 3
 difficulty: "advanced"
 tags:
   - transformers
   - attention
+  - llm
   - gpt
-  - architecture
   - deep-learning
 slug: "transformers"
 ---
 
-## Introduction
+## Why This Matters
 
-The Transformer architecture revolutionized deep learning. This guide implements multi-head attention, positional encoding, and a causal language model from scratch using PyTorch.
+You can build useful AI apps without knowing how a transformer works — until something strange happens. Why does the model forget instructions in a very long prompt? Why does doubling the context make requests slower and more expensive? Why does temperature 0 still give slightly different answers? Why can't the model count the letters in "strawberry"?
 
-## Scaled Dot-Product Attention
+Every one of these questions is answered by the architecture you'll learn here. Almost every major LLM — GPT, Claude, Gemini, Llama, Mistral, DeepSeek — is built on the **transformer**, introduced in the 2017 paper *"Attention Is All You Need"*. Understanding its core idea, **attention**, turns LLM behaviour from mysterious into predictable.
 
-The core operation:
+By the end of this lesson you will be able to:
 
-`Attention(Q, K, V) = softmax(Q * K^T / sqrt(d_k)) * V`
+- trace a prompt from text to tokens to vectors to a predicted next token,
+- explain self-attention with queries, keys and values — and implement it in NumPy,
+- explain why GPT-style models use a causal mask,
+- inspect a real model's next-token probabilities and understand temperature and top-p.
+
+## From Text to Prediction: The Big Picture
+
+A GPT-style (decoder-only) model does one thing: **given the tokens so far, predict a probability for every possible next token.** Generation is that step in a loop — pick a token, append it, predict again.
+
+Inside, the journey looks like this (the animated diagram at the top of this page walks through it):
+
+1. **Tokenize** — text is split into tokens (often word pieces) using a method such as Byte-Pair Encoding. GPT-2's vocabulary has 50,257 tokens.
+2. **Embed** — each token ID becomes a vector (768 numbers in GPT-2 small), plus information about its **position**.
+3. **Transformer blocks** — the vectors pass through a stack of identical blocks (12 in GPT-2 small). Each block lets tokens exchange information through **attention**, then processes each token with a small feed-forward network.
+4. **LM head** — the final vector of the last position is turned into one score (*logit*) per vocabulary token; softmax turns scores into probabilities.
+
+Try the [tokenizer playground](/playground) to see how text splits into tokens — it also explains why counting letters is hard: the model sees `straw` + `berry`, not individual characters.
+
+## Self-Attention, Step by Step
+
+Consider the sentence *"The animal didn't cross the street because **it** was too tired."* To understand *it*, the model must connect it to *animal*, not *street*. Attention is the mechanism that lets every token look at every other token and pull in the information it needs.
+
+### Queries, keys and values
+
+Each token's vector is multiplied by three learned weight matrices to produce three new vectors:
+
+| Vector | Intuition |
+|---|---|
+| **Query (Q)** | "What am I looking for?" |
+| **Key (K)** | "What do I contain?" — used to be matched against queries |
+| **Value (V)** | "What information do I pass on if I'm chosen?" |
+
+Then, for every token:
+
+1. **Score** it against every token: the dot product of its query with each key. A high score means "relevant to me".
+2. **Scale** the scores by dividing by √dₖ (the square root of the key dimension). Without this, large dot products push softmax into extreme values where learning stalls.
+3. **Softmax** the scores into weights that sum to 1.
+4. **Mix** the value vectors using those weights. The result is the token's new, context-aware representation.
+
+In matrix form, for all tokens at once: **Attention(Q, K, V) = softmax(QKᵀ / √dₖ) · V**.
+
+### The causal mask
+
+When predicting the next token, a model must not peek at the future. GPT-style models apply a **causal mask**: before softmax, every score where a token would look at a *later* position is set to −∞, so its weight becomes 0. Token 3 can attend to tokens 1–3, never to 4 or beyond. This is why the attention-weight matrix is lower-triangular.
+
+### Multi-head attention
+
+One attention pattern can't capture everything — grammar, coreference, topic and position all matter. **Multi-head attention** runs several attention operations in parallel, each with its own Q/K/V weights and a smaller dimension. GPT-2 small uses 12 heads of 64 dimensions each (12 × 64 = 768). The heads' outputs are concatenated and projected back to the model dimension.
+
+### The rest of the block
+
+Each transformer block also contains:
+
+- a **feed-forward network** applied to every token separately (typically expanding to about 4× the model dimension and back),
+- **residual connections** that add each sub-layer's input to its output, so information and gradients flow through deep stacks,
+- **layer normalization** to keep values in a stable range.
+
+### Where does position come from?
+
+Attention by itself has no sense of order — "dog bites man" and "man bites dog" contain the same tokens. The original transformer added fixed **sinusoidal** position signals; GPT-2 learns a position embedding; many modern models use **Rotary Position Embeddings (RoPE)**, which rotate queries and keys by an angle that depends on position.
+
+## Hands-On: Attention From Scratch in NumPy
+
+This code runs anywhere — no GPU, no API key. It implements single-head causal self-attention exactly as described above.
 
 ```python
+# pip install numpy
+import numpy as np
+
+rng = np.random.default_rng(0)
+
+def softmax(x: np.ndarray) -> np.ndarray:
+    x = x - x.max(axis=-1, keepdims=True)        # numerical stability
+    e = np.exp(x)
+    return e / e.sum(axis=-1, keepdims=True)
+
+def causal_self_attention(X, Wq, Wk, Wv):
+    Q, K, V = X @ Wq, X @ Wk, X @ Wv              # (seq, d_k) each
+    d_k = Q.shape[-1]
+    scores = Q @ K.T / np.sqrt(d_k)               # (seq, seq) similarity of every pair
+    future = np.triu(np.ones_like(scores, dtype=bool), k=1)
+    scores = np.where(future, -np.inf, scores)    # causal mask: no looking ahead
+    weights = softmax(scores)                     # each row sums to 1
+    return weights @ V, weights
+
+tokens = ["The", "cat", "sat", "on", "the", "mat"]
+seq, d_model, d_k = len(tokens), 16, 8
+
+X  = rng.normal(size=(seq, d_model))              # stand-in for token + position embeddings
+Wq = rng.normal(scale=0.2, size=(d_model, d_k))
+Wk = rng.normal(scale=0.2, size=(d_model, d_k))
+Wv = rng.normal(scale=0.2, size=(d_model, d_k))
+
+out, weights = causal_self_attention(X, Wq, Wk, Wv)
+print("output shape:", out.shape)                 # (6, 8): one new vector per token
+print(np.round(weights, 2))                       # lower-triangular attention matrix
+```
+
+Read the printed matrix: row *i* shows how much token *i* attends to each earlier token. The upper triangle is all zeros — that's the causal mask at work. The weights here are random because the matrices are untrained; in a real model, training shapes them into meaningful patterns.
+
+## Mini Project: Look Inside GPT-2
+
+Now inspect a real (small) transformer. GPT-2 small has about 124 million parameters and runs on a normal laptop CPU. The first run downloads roughly 500 MB.
+
+```python
+# pip install transformers torch
 import torch
-import torch.nn.functional as F
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
-def scaled_dot_product_attention(
-    Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor, mask: torch.Tensor | None = None
-) -> torch.Tensor:
-    scores = Q @ K.transpose(-2, -1) / (K.size(-1) ** 0.5)
-    if mask is not None:
-        scores = scores.masked_fill(mask == 0, float("-inf"))
-    return F.softmax(scores, dim=-1) @ V
+tok = AutoTokenizer.from_pretrained("gpt2")
+model = AutoModelForCausalLM.from_pretrained("gpt2", attn_implementation="eager")  # eager → attention weights available
+model.eval()
+
+prompt = "The capital of France is"
+ids = tok(prompt, return_tensors="pt").input_ids
+print("tokens:", [tok.decode(t) for t in ids[0]])
+
+with torch.no_grad():
+    out = model(ids, output_attentions=True)
+
+def top_next_tokens(logits, temperature=1.0, k=5):
+    probs = torch.softmax(logits / temperature, dim=-1)
+    top = torch.topk(probs, k)
+    return [(tok.decode(int(i)), round(float(p), 3)) for p, i in zip(top.values, top.indices)]
+
+last_logits = out.logits[0, -1]
+for t in (0.5, 1.0, 1.5):
+    print(f"temperature {t}:", top_next_tokens(last_logits, t))
+
+# attention of the last token in layer 1, head 1 (indexes start at 0)
+attn = out.attentions[0][0, 0, -1]
+for token_id, w in zip(ids[0], attn):
+    print(f"{tok.decode(int(token_id))!r:>10}  {float(w):.2f}")
 ```
 
-## Multi-Head Attention
+What to observe:
 
-```python
-class MultiHeadAttention(torch.nn.Module):
-    def __init__(self, d_model: int, n_heads: int):
-        super().__init__()
-        self.W_q = torch.nn.Linear(d_model, d_model)
-        self.W_k = torch.nn.Linear(d_model, d_model)
-        self.W_v = torch.nn.Linear(d_model, d_model)
-        self.W_o = torch.nn.Linear(d_model, d_model)
-        self.n_heads = n_heads
+1. **Tokens** — notice the leading spaces (`" capital"`): spaces are part of tokens.
+2. **Temperature** — low temperature makes the top token dominate; high temperature flattens the distribution so unlikely tokens get a real chance. That's all temperature is: dividing logits before softmax.
+3. **Attention** — the weights show which earlier tokens the last position is reading from in that head. Try other layers and heads; different heads specialize in different patterns.
 
-    def forward(self, x: torch.Tensor, mask: torch.Tensor | None = None) -> torch.Tensor:
-        B, T, D = x.shape
-        Q = self.W_q(x).view(B, T, self.n_heads, D // self.n_heads).transpose(1, 2)
-        K = self.W_k(x).view(B, T, self.n_heads, D // self.n_heads).transpose(1, 2)
-        V = self.W_v(x).view(B, T, self.n_heads, D // self.n_heads).transpose(1, 2)
-        out = scaled_dot_product_attention(Q, K, V, mask)
-        out = out.transpose(1, 2).contiguous().view(B, T, D)
-        return self.W_o(out)
-```
+**Stretch goals**
 
-## Causal Language Model Head
+1. Write a loop that generates 20 tokens one at a time by sampling from the probabilities (the full generation algorithm in ~10 lines).
+2. Implement **top-p (nucleus) sampling**: keep the smallest set of tokens whose probabilities add up to *p* (e.g. 0.9), renormalize, then sample.
+3. Plot an attention matrix as a heatmap with `matplotlib` for a longer sentence.
 
-```python
-class GPT(torch.nn.Module):
-    def __init__(self, vocab_size: int, d_model: int, n_layers: int, n_heads: int):
-        super().__init__()
-        self.token_embedding = torch.nn.Embedding(vocab_size, d_model)
-        self.pos_embedding = torch.nn.Embedding(1024, d_model)
-        self.layers = torch.nn.ModuleList([
-            torch.nn.TransformerEncoderLayer(d_model, n_heads, dim_feedforward=d_model * 4)
-            for _ in range(n_layers)
-        ])
-        self.lm_head = torch.nn.Linear(d_model, vocab_size)
+## Common Misconceptions
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        B, T = x.shape
-        pos = torch.arange(0, T, device=x.device).unsqueeze(0)
-        x = self.token_embedding(x) + self.pos_embedding(pos)
-        causal_mask = torch.triu(torch.ones(T, T, device=x.device), diagonal=1).bool()
-        for layer in self.layers:
-            x = layer(x, src_key_padding_mask=None, mask=causal_mask)
-        return self.lm_head(x)
-```
+1. **"The model reads words."** It reads tokens. That's why spelling, counting characters and some arithmetic are surprisingly hard.
+2. **"Temperature 0 means fully deterministic."** It picks the most likely token, but tiny numerical differences on GPUs and batching can still change results occasionally.
+3. **"A bigger context window means it uses everything equally well."** Models can miss details buried in the middle of very long inputs. Put key instructions and facts where they're easy to find, and retrieve only what's relevant.
+4. **"Attention is the whole model."** The feed-forward layers hold most of the parameters and much of the stored knowledge.
+5. **"The model plans the whole answer first."** It produces one token at a time; each step only sees the tokens generated so far.
+
+## Production Tips: What the Architecture Means for Your Apps
+
+- **Cost and latency grow with tokens.** Every input token is processed, and standard attention compares every token with every other one — compute grows roughly quadratically with sequence length. Send only the context you need.
+- **The KV cache explains "prefill" vs "generation."** During generation the model caches keys and values of earlier tokens, so each new token is cheap — but processing a long prompt up front is expensive. Repeated prompt prefixes can be cached by many providers.
+- **Output tokens are generated sequentially**, so long answers take longer than long prompts of the same size. Ask for concise outputs when speed matters.
+- **Order matters in prompts.** Clear instructions at the start or end, and relevant retrieved chunks rather than whole documents, give the attention mechanism an easier job.
+- **Sampling settings are product decisions.** Low temperature for extraction and classification; moderate for writing and brainstorming.
 
 ## Key Takeaways
 
-- Attention computes weighted combinations of all positions
-- Multi-head attention allows the model to attend to different representation subspaces
-- Causal masking prevents the model from seeing future tokens
-- Positional encoding gives the model sequence order information
+- A GPT-style model repeatedly predicts the next token from the tokens so far — generation is a loop.
+- Self-attention lets every token weigh every earlier token: softmax(QKᵀ / √dₖ) · V.
+- The causal mask blocks attention to future tokens; multi-head attention runs several attention patterns in parallel.
+- Position comes from position embeddings (learned, sinusoidal or rotary), because attention alone ignores order.
+- Tokens, context length and sampling settings directly drive the cost, speed and behaviour of your applications.
+
+## Further Reading
+
+- Vaswani et al., *Attention Is All You Need* (2017) — [arXiv:1706.03762](https://arxiv.org/abs/1706.03762)
+- Radford et al., *Language Models are Unsupervised Multitask Learners* (GPT-2, 2019) — [OpenAI PDF](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf)
+- Su et al., *RoFormer: Enhanced Transformer with Rotary Position Embedding* — [arXiv:2104.09864](https://arxiv.org/abs/2104.09864)
+- Holtzman et al., *The Curious Case of Neural Text Degeneration* (top-p sampling) — [arXiv:1904.09751](https://arxiv.org/abs/1904.09751)
+- [Hugging Face Transformers documentation](https://huggingface.co/docs/transformers)
+- Try it live: the [tokenizer and embeddings playground](/playground)

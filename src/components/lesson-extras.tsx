@@ -19,6 +19,7 @@ export function Breadcrumbs({ track, trackHref, title }: { track: string; trackH
 
 // Pull the "## Key Takeaways" bullets out of a lesson so they can lead the page
 export function splitTakeaways(content: string): { body: string; takeaways: string[] } {
+  content = content.replace(/\r\n/g, "\n"); // tolerate Windows line endings
   const m = content.match(/^##\s+Key Takeaways\s*\n([\s\S]*?)(?=^##\s|(?![\s\S]))/m);
   if (!m) return { body: content, takeaways: [] };
   const takeaways = m[1]
