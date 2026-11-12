@@ -192,7 +192,7 @@ export default async function DocPage({ params }: PageProps) {
               ))}
             </div>
           </header>
-          <LessonIllustration category={category} title={doc.title} />
+          <LessonIllustration category={category} slug={slug} title={doc.title} />
           <KeyTakeaways items={takeaways} />
           <div className="prose prose-zinc dark:prose-invert sm:prose-lg max-w-none prose-pre:overflow-x-auto prose-table:block prose-table:overflow-x-auto">
             <MDXRemote
