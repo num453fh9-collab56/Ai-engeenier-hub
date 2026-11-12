@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BookOpen, FileDown } from "lucide-react";
 import { Newsletter } from "@/components/newsletter";
 import { CourseGrid } from "@/components/course-grid";
+import { getLessonCards } from "@/lib/lesson-cards";
 import { CurriculumRoadmap } from "@/components/curriculum-roadmap";
 import { LandingHero } from "@/components/landing-hero";
 import { CardCarousel } from "@/components/card-carousel";
@@ -73,7 +74,7 @@ export default function Home() {
         ))}
       </CardCarousel>
 
-      <CourseGrid />
+      <CourseGrid lessons={getLessonCards()} />
 
       <CurriculumRoadmap />
 

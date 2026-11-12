@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { CourseCatalog } from "@/components/course-catalog";
 import { CourseGrid } from "@/components/course-grid";
+import { getLessonCards } from "@/lib/lesson-cards";
 
 export const metadata: Metadata = {
   title: "Course Catalog",
@@ -20,7 +21,7 @@ export default function CatalogPage() {
       </section>
       <CourseCatalog />
       <div className="border-t border-border/40">
-        <CourseGrid />
+        <CourseGrid lessons={getLessonCards()} />
       </div>
     </div>
   );

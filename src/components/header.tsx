@@ -21,11 +21,11 @@ export function Header() {
           </span>
         </Link>
 
-        <div className="flex-1 flex justify-center max-w-md mx-2">
+        <div className="flex-1 flex min-w-24 justify-center max-w-md mx-2">
           <SearchCommand />
         </div>
 
-        <nav className="flex items-center gap-0.5 shrink-0">
+        <nav className="no-scrollbar flex min-w-0 items-center gap-0.5 overflow-x-auto">
           <Button variant="ghost" size="sm" asChild>
             <Link href="/roadmap" aria-label="Roadmap">
               <Route className="size-3.5" />
