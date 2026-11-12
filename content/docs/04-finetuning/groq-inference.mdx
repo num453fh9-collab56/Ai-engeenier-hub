@@ -1,64 +1,199 @@
 ---
 title: "Groq LPU: Ultra-Fast LLM Inference"
-description: "Leverage Groq's Language Processing Units for sub-200ms inference at scale."
+description: "Why inference speed matters, how to measure it (time to first token, tokens per second), and how to build fast, streaming LLM features with Groq's API — including OpenAI-compatible usage, fallbacks and a latency benchmark you run yourself."
 category: "04-finetuning"
 order: 2
 difficulty: "intermediate"
 tags:
   - groq
   - inference
-  - lpu
+  - latency
+  - streaming
   - performance
-  - llm
 slug: "groq-inference"
 ---
 
-## Introduction
+## Why This Matters
 
-Groq's Language Processing Unit (LPU) is a custom tensor processor designed for ultra-low-latency LLM inference. Unlike GPUs, the LPU eliminates scheduling overhead for deterministic, predictable performance.
+Picture three products built on the same model quality:
 
-## Groq API Quickstart
+- A **voice assistant** that pauses three seconds before every reply feels broken.
+- An **agent** that makes 15 model calls per task multiplies every second of latency by 15.
+- A **chat UI** that shows nothing until the full answer is ready loses users, even if the answer is great.
+
+In all three, **speed is a feature**. Model quality gets the headlines, but latency often decides whether people keep using an AI product.
+
+**Groq** is one provider built specifically for fast inference: it serves popular open-weight models on custom hardware called the **LPU** (Language Processing Unit), behind an API that works much like OpenAI's. (The AI tutor on this site uses Groq for exactly this reason.) This lesson uses Groq as the running example, but the measurement and design skills apply to any provider.
+
+By the end of this lesson you will be able to:
+
+- explain the latency metrics that matter and how to measure them,
+- call Groq with its own SDK and through the OpenAI SDK,
+- stream tokens to users and measure time to first token,
+- design fallbacks so speed doesn't cost you reliability.
+
+## Understanding LLM Latency
+
+### Two phases of every request
+
+When you call an LLM, the server does two different kinds of work (see [Transformers](/docs/01-foundations/transformers) for the details):
+
+1. **Prefill** — process your whole prompt at once and build the attention cache. Longer prompts mean longer prefill.
+2. **Decode** — generate the answer **one token at a time**. Each new token needs another pass through the model.
+
+### The metrics to track
+
+| Metric | What it measures | Why users care |
+|---|---|---|
+| **Time to first token (TTFT)** | Request sent → first token received | How long the screen stays blank |
+| **Output speed (tokens/second)** | How fast tokens stream after the first | How fast the answer "types" |
+| **End-to-end latency** | Request sent → last token received | Total wait, critical for agents and pipelines |
+| **Tail latency (p95/p99)** | The slowest 5% / 1% of requests | What your unluckiest users experience |
+
+Always measure **percentiles**, not just the average — a service that's usually fast but sometimes takes 20 seconds feels unreliable.
+
+### Why specialised hardware helps
+
+Decoding is limited less by raw maths and more by how fast weights and cache can move through memory for each token. Groq designed its LPU around fast, predictable on-chip data movement for this sequential workload, which is why it is known for very high output speeds. Speeds differ by model and change over time, so **benchmark with your own prompts** rather than trusting any single published number.
+
+### What you trade
+
+- **Model choice:** fast-inference providers serve specific open-weight models (for example Llama-family models). If you need a particular proprietary model, you'll use its own provider.
+- **Limits:** free tiers and plans have rate limits on requests and tokens per minute.
+- **Vendor dependence:** design a fallback provider from day one.
+
+## Hands-On: Calling Groq
+
+Create an API key in the Groq console and store it as the environment variable `GROQ_API_KEY`. The examples follow Groq's official quickstart.
+
+### Basic request with the Groq SDK
 
 ```python
+# pip install groq
+import os
 from groq import Groq
 
-client = Groq(api_key="gsk_your_key")
+client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 completion = client.chat.completions.create(
-    model="llama-3.3-70b-versatile",
-    messages=[{"role": "user", "content": "Explain LPU architecture"}],
-    temperature=0.7,
-    max_tokens=512,
+    model="llama-3.3-70b-versatile",   # check Groq's models page for current options
+    messages=[
+        {"role": "system", "content": "You are a concise assistant."},
+        {"role": "user", "content": "Explain RAG in two sentences."},
+    ],
 )
-
 print(completion.choices[0].message.content)
 ```
 
-## Streaming Response
+### Streaming, with time to first token
 
 ```python
+import time
+
+start = time.perf_counter()
+first_token_at = None
+chunks = 0
+
 stream = client.chat.completions.create(
     model="llama-3.3-70b-versatile",
-    messages=[{"role": "user", "content": "Write a poem about AI"}],
+    messages=[{"role": "user", "content": "Write a 150-word intro to vector databases."}],
     stream=True,
 )
-
 for chunk in stream:
-    print(chunk.choices[0].delta.content or "", end="")
+    delta = chunk.choices[0].delta.content
+    if delta:
+        if first_token_at is None:
+            first_token_at = time.perf_counter()
+        chunks += 1
+        print(delta, end="", flush=True)
+
+end = time.perf_counter()
+print(f"\n\nTTFT: {first_token_at - start:.2f}s | total: {end - start:.2f}s | "
+      f"~{chunks / (end - first_token_at):.0f} chunks/s")
 ```
 
-## Performance Benchmarks
+A streamed chunk is usually about one token, so chunks per second is a quick approximation of output speed; for exact numbers, use the token counts reported in the API's usage data.
 
-| Metric | GPU (A100) | Groq LPU |
-|--------|-----------|----------|
-| Latency (70B) | ~800ms | ~150ms |
-| Tokens/sec | ~120 | ~480 |
-| Cost/1M tokens | ~$0.59 | ~$0.59 |
-| Deterministic | No | Yes |
+### Using the OpenAI SDK instead
+
+Groq offers an OpenAI-compatible endpoint, so existing OpenAI-based code can switch by changing the base URL and key:
+
+```python
+import os
+from openai import OpenAI
+
+groq = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=os.environ["GROQ_API_KEY"])
+r = groq.chat.completions.create(
+    model="llama-3.3-70b-versatile",
+    messages=[{"role": "user", "content": "One tip for faster LLM apps?"}],
+)
+print(r.choices[0].message.content)
+```
+
+Compatibility covers the common features; check the provider's docs for anything advanced you rely on.
+
+### A simple fallback
+
+```python
+def ask(messages, providers):
+    """providers: list of (client, model) tried in order."""
+    last_error = None
+    for client, model in providers:
+        try:
+            return client.chat.completions.create(model=model, messages=messages, timeout=20)
+        except Exception as e:     # rate limit, timeout, outage…
+            last_error = e
+    raise last_error
+```
+
+Put the fastest provider first and a reliable alternative second. Log every fallback — frequent fallbacks are a signal to investigate.
+
+## Mini Project: Your Own Latency Benchmark
+
+Published speed numbers rarely match your workload. Measure it yourself.
+
+1. Write **10 realistic prompts** from your app: short questions, long-context questions, and prompts that need long answers.
+2. For each **provider/model pair** you're considering, run every prompt **5 times** with streaming and record TTFT, total time and output speed.
+3. Compute the **median and p95** for each metric with `statistics.median` and `statistics.quantiles`.
+4. Show the results in a table and add **cost per 1,000 requests** from each provider's pricing page.
+5. Decide: which option meets your latency target at acceptable cost and quality?
+
+**Stretch goals**
+
+1. Repeat with a 3,000-token prompt to see how prefill affects TTFT.
+2. Build a tiny streaming chat in the terminal that prints tokens as they arrive.
+3. Run your benchmark at different times of day — does performance vary?
+
+## Common Mistakes
+
+1. **Not streaming.** Users wait for the whole answer instead of watching it appear.
+2. **Measuring once.** Single measurements are noise; use repeated runs and percentiles.
+3. **Bloated prompts.** Every unnecessary token adds prefill time and cost. Trim context and retrieve only what's relevant.
+4. **Asking for long answers you don't need.** Output tokens are generated sequentially — set length limits.
+5. **No fallback or timeout.** One provider outage shouldn't take your app down.
+6. **Hard-coding model names everywhere.** Models are retired and replaced; keep them in config.
+7. **Ignoring rate limits.** Add retries with backoff and a concurrency limit (see [Python Async & Structured Outputs](/docs/01-foundations/intro)).
+
+## Production Tips
+
+- **Set a latency budget** per feature (for example: TTFT under 1 s for chat) and alert when p95 exceeds it.
+- **Route by need:** a fast small model for classification and routing, a larger model only for hard steps.
+- **Cache** repeated requests and use providers' prompt caching for long shared prefixes.
+- **Stream all the way to the browser**, so the UI shows progress immediately.
+- **Track cost per request** next to latency; the fastest option isn't always affordable at scale.
+- **Re-benchmark regularly** — providers ship new models and hardware often.
 
 ## Key Takeaways
 
-- Groq LPUs deliver 3-5x lower latency than equivalent GPUs
-- Deterministic execution eliminates output variance
-- Ideal for real-time applications like chatbots and code generation
-- API is OpenAI-compatible for easy migration
+- Latency is a product feature: measure time to first token, output speed, end-to-end time and p95.
+- LLM requests have a prefill phase (prompt) and a sequential decode phase (answer); both affect speed.
+- Groq serves open-weight models on its LPU hardware with its own SDK and an OpenAI-compatible endpoint.
+- Stream responses, keep prompts and outputs lean, and always have timeouts and a fallback provider.
+- Benchmark with your own prompts — published numbers rarely match real workloads.
+
+## Further Reading
+
+- [Groq documentation: Quickstart](https://console.groq.com/docs/quickstart)
+- [Groq documentation: OpenAI compatibility](https://console.groq.com/docs/openai)
+- [Groq: Supported models](https://console.groq.com/docs/models)
+- Related lessons: [Transformers](/docs/01-foundations/transformers) · [MLOps](/docs/04-finetuning/mlops)

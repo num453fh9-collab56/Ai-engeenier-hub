@@ -1,6 +1,6 @@
 ---
 title: "LLM Fine-Tuning with LoRA & QLoRA"
-description: "Efficiently fine-tune large language models using parameter-efficient techniques like LoRA and QLoRA."
+description: "Know when fine-tuning beats prompting or RAG, prepare a high-quality dataset, and train a model with LoRA or QLoRA using Hugging Face TRL and PEFT — then evaluate whether it actually got better."
 category: "04-finetuning"
 order: 1
 difficulty: "advanced"
@@ -9,98 +9,217 @@ tags:
   - lora
   - qlora
   - peft
-  - transformers
-  - huggingface
+  - trl
 slug: "fine-tuning"
 ---
 
-## Introduction
+## Why This Matters
 
-Fine-tuning adapts a pre-trained LLM to a specific task or domain. Full fine-tuning updates all parameters and is expensive. **Parameter-Efficient Fine-Tuning (PEFT)** methods like LoRA and QLoRA achieve comparable results at a fraction of the cost.
+Your company wants a model that writes support replies in its exact house style: short, friendly, always ending with a ticket reference, never promising refunds. You've written a long prompt with rules and examples. It works *most* of the time, but every reply costs hundreds of extra prompt tokens, and the model still drifts on unusual cases.
 
-## LoRA: Low-Rank Adaptation
+**Fine-tuning** teaches the behaviour directly to the model's weights using examples. Done well, a small fine-tuned open model can follow a narrow style or format more consistently than a big general model with a long prompt — and run faster and cheaper.
 
-LoRA decomposes weight updates into low-rank matrices:
+Done badly, it wastes days of GPU time and produces a model that is *worse*. The difference is knowing **when** to fine-tune, preparing **good data**, using **efficient methods** like LoRA, and **measuring** the result.
 
-`W' = W + BA`
+By the end of this lesson you will be able to:
 
-Where B in R^(d x r), A in R^(r x k), and r is much less than min(d, k).
+- decide between prompting, RAG and fine-tuning for a given problem,
+- prepare a fine-tuning dataset in the formats modern tools expect,
+- explain how LoRA and QLoRA make fine-tuning affordable,
+- train a LoRA adapter with Hugging Face TRL and PEFT, and evaluate it honestly.
 
-```python
-import torch
-import torch.nn as nn
+## Prompting vs RAG vs Fine-Tuning
 
-class LoRALayer(nn.Module):
-    def __init__(self, in_dim: int, out_dim: int, rank: int = 8, alpha: float = 16):
-        super().__init__()
-        self.A = nn.Parameter(torch.randn(in_dim, rank) * 0.01)
-        self.B = nn.Parameter(torch.zeros(rank, out_dim))
-        self.scale = alpha / rank
+These tools solve different problems. Choosing the wrong one is the most expensive mistake in this area.
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return (x @ self.A @ self.B) * self.scale
+| Goal | Best first tool | Why |
+|---|---|---|
+| Follow instructions for a new task | **Prompting** | Fastest to try and change; no training needed |
+| Answer from your documents or fresh data | **RAG** | Knowledge stays up to date and citable; fine-tuning is poor at storing facts |
+| Consistent style, tone or output format | **Fine-tuning** | Behaviour is learned, so prompts get shorter and more reliable |
+| A narrow, repeated task at high volume | **Fine-tuning a small model** | A small specialised model can be faster and cheaper than a large general one |
+| Teach the model a new language or domain jargon deeply | **Fine-tuning** (often more data) | Needs patterns the base model doesn't have |
+
+A practical order: **prompt first, add RAG for knowledge, fine-tune for behaviour** — and only after the simpler options have been measured. These approaches combine well: a fine-tuned model can still use RAG.
+
+## How LoRA and QLoRA Work
+
+### The problem with full fine-tuning
+
+Full fine-tuning updates **every** weight in the model. For a model with billions of parameters, that means storing gradients and optimizer states for all of them — far more GPU memory than just running the model — and saving a full copy of the model for every experiment.
+
+### LoRA: train small add-on matrices
+
+**LoRA (Low-Rank Adaptation)**, introduced by Hu et al. (2021), freezes the original weights and adds pairs of small trainable matrices to selected layers. The animated diagram at the top of this page shows the idea:
+
+- A frozen weight matrix **W** has shape *d × d*.
+- LoRA adds **B** (*d × r*) and **A** (*r × d*), where the rank **r** is small (often 8–64).
+- The layer now computes with **W + B·A**. Only A and B are trained.
+
+Because *r* is much smaller than *d*, the trainable parameters drop dramatically — the LoRA paper reports up to **10,000× fewer trainable parameters** than full fine-tuning for GPT-3 175B. The result is a small **adapter** file you can store, share, swap or merge into the base model.
+
+Key settings:
+
+| Setting | Meaning | Typical start |
+|---|---|---|
+| `r` | Rank of the adapter matrices | 8–32 |
+| `lora_alpha` | Scaling of the adapter's effect | Often 2× `r` |
+| `target_modules` | Which layers get adapters | Attention projections, or all linear layers |
+| `lora_dropout` | Regularisation | 0.0–0.1 |
+| Learning rate | Step size | Around 1e-4 for adapters (higher than full fine-tuning) |
+
+### QLoRA: LoRA on a 4-bit model
+
+**QLoRA** (Dettmers et al., 2023) goes further: it loads the frozen base model in **4-bit precision** (a data type called NF4, plus "double quantization") and trains LoRA adapters on top. The paper showed that a 65-billion-parameter model could be fine-tuned on a **single 48 GB GPU** while matching 16-bit fine-tuning quality on its benchmarks. In practice, QLoRA is what makes fine-tuning possible on consumer GPUs and free notebook GPUs.
+
+## Preparing Your Dataset
+
+Data quality matters more than any hyperparameter.
+
+### Formats
+
+Hugging Face TRL's `SFTTrainer` accepts a **conversational** format, and applies the model's chat template for you:
+
+```json
+{"messages": [
+  {"role": "system", "content": "You are Acme's support assistant."},
+  {"role": "user", "content": "My parcel hasn't arrived after 10 days."},
+  {"role": "assistant", "content": "Sorry about the wait! I've asked our courier to trace it. You'll get an update within 24 hours. Ticket: #A-1042"}
+]}
 ```
 
-## QLoRA: Quantized LoRA
+One JSON object per line (a `.jsonl` file). TRL also supports prompt–completion pairs; with that format, by default the loss is computed only on the completion.
 
-QLoRA combines 4-bit NormalFloat quantization with LoRA:
+### Rules for good training data
 
-```python
-from transformers import BitsAndBytesConfig, AutoModelForCausalLM
+- **Quality over quantity.** A few hundred carefully written, consistent examples often beat thousands of noisy ones for style and format tasks.
+- **Cover the edge cases** you care about — angry customers, missing information, requests you must refuse.
+- **Keep it consistent.** If examples contradict each other, the model learns the contradiction.
+- **Hold out a test set** (10–20%) that is never used for training.
+- **Remove sensitive data** — anything in training data can resurface in outputs.
 
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_use_double_quant=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.bfloat16,
-)
+## Hands-On: LoRA Fine-Tuning with TRL
 
-model = AutoModelForCausalLM.from_pretrained(
-    "meta-llama/Llama-2-7b-hf",
-    quantization_config=bnb_config,
-    device_map="auto",
-)
-```
-
-## Training Loop
+This follows the current TRL `SFTTrainer` documentation: pass a model ID as a string, a dataset, an `SFTConfig`, and a PEFT `LoraConfig`.
 
 ```python
-from transformers import TrainingArguments, Trainer
-from peft import LoraConfig, get_peft_model
+# pip install trl peft datasets
+from datasets import load_dataset
+from peft import LoraConfig
+from trl import SFTConfig, SFTTrainer
 
-lora_config = LoraConfig(
+dataset = load_dataset("json", data_files="support_train.jsonl", split="train")
+
+peft_config = LoraConfig(
     r=16,
     lora_alpha=32,
-    target_modules=["q_proj", "v_proj"],
     lora_dropout=0.05,
-    bias="none",
+    target_modules="all-linear",   # put adapters on every linear layer
     task_type="CAUSAL_LM",
 )
 
-model = get_peft_model(model, lora_config)
-
-training_args = TrainingArguments(
-    output_dir="./lora-finetuned",
+args = SFTConfig(
+    output_dir="support-lora",
+    num_train_epochs=3,
+    learning_rate=1e-4,            # adapters train well with a higher LR
     per_device_train_batch_size=4,
     gradient_accumulation_steps=4,
-    learning_rate=2e-4,
-    num_train_epochs=3,
     logging_steps=10,
-    save_strategy="epoch",
+    assistant_only_loss=True,      # learn from the assistant's replies, not the user's text
 )
 
-trainer = Trainer(
-    model=model,
-    args=training_args,
+trainer = SFTTrainer(
+    model="Qwen/Qwen3-0.6B",       # small enough for a free notebook GPU
     train_dataset=dataset,
+    args=args,
+    peft_config=peft_config,
+)
+trainer.train()
+trainer.save_model("support-lora")  # saves just the small adapter
+```
+
+### Switching to QLoRA
+
+Load the base model in 4-bit by adding a quantization config (requires a CUDA GPU and the `bitsandbytes` package):
+
+```python
+import torch
+from transformers import BitsAndBytesConfig
+
+bnb = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_use_double_quant=True,
+    bnb_4bit_compute_dtype=torch.bfloat16,
 )
 
-trainer.train()
+trainer = SFTTrainer(
+    model="Qwen/Qwen3-0.6B",
+    train_dataset=dataset,
+    args=args,
+    peft_config=peft_config,
+    quantization_config=bnb,
+)
 ```
+
+> **GPU note:** `SFTConfig` uses bfloat16 by default. Older GPUs such as the T4 (common in free notebooks) don't support bfloat16 — set `fp16=True` in `SFTConfig` and use `torch.float16` as the compute dtype there.
+
+### Using the trained adapter
+
+```python
+from transformers import pipeline
+
+chat = pipeline("text-generation", model="support-lora")   # loads base model + adapter
+reply = chat([{"role": "user", "content": "I was charged twice for order 5120."}], max_new_tokens=120)
+print(reply[0]["generated_text"][-1]["content"])
+```
+
+For production you can keep the adapter separate (many serving engines can load LoRA adapters on top of a base model) or merge it into the base weights.
+
+## Mini Project: A House-Style Support Model
+
+1. **Write 150–300 examples** of customer messages and ideal replies in your house style (or generate drafts with a strong model, then edit every one by hand). Include 20+ cases where the correct answer is to refuse or escalate.
+2. **Split** into `support_train.jsonl` (85%) and `support_test.jsonl` (15%).
+3. **Baseline first:** run the base model with your best prompt on the test set and save the outputs.
+4. **Fine-tune** with the LoRA code above (a free GPU notebook is enough for a 0.6B model).
+5. **Compare** baseline vs fine-tuned on the test set with a simple scorecard: correct format? correct tone? any forbidden promises? Score by hand or with an LLM judge plus spot checks.
+6. **Decide with numbers**: is the improvement worth maintaining a custom model?
+
+**Stretch goals**
+
+1. Try `r = 8` vs `r = 32` and compare quality and adapter size.
+2. Repeat with QLoRA and compare GPU memory use.
+3. Serve the model with vLLM (see [MLOps](/docs/04-finetuning/mlops)) and measure tokens per second.
+
+## Common Mistakes
+
+1. **Fine-tuning to add knowledge.** Facts change and fine-tuned facts are hard to update or cite. Use RAG for knowledge.
+2. **No baseline.** Without measuring the prompt-only version, you can't prove fine-tuning helped.
+3. **Messy, inconsistent data.** The model faithfully learns your mistakes.
+4. **Evaluating on training examples.** Always test on held-out data.
+5. **Overfitting.** Too many epochs on a small dataset makes the model repeat training phrases. Watch the eval loss and outputs.
+6. **Wrong chat template.** Training and inference must use the same template, or quality collapses.
+7. **Ignoring licences.** Check the base model's licence and your data rights before shipping.
+
+## Production Tips
+
+- **Version everything:** dataset, base model, config and adapter — you must be able to reproduce any model you deploy.
+- **Keep an eval suite** and run it on every new adapter before release (see [RAG Evaluation](/docs/02-rag/rag-eval) for the same discipline).
+- **Start small:** a fine-tuned small model is cheaper to serve; move to a larger base only if quality demands it.
+- **Re-train on fresh failures:** collect real cases where the model got it wrong, fix them, and add them to the next dataset.
+- **Consider managed fine-tuning** (from model providers or GPU clouds) if you don't want to run training infrastructure — compare options in the [AI Tools Directory](/directory).
 
 ## Key Takeaways
 
-- LoRA trains only 0.1-1% of parameters while matching full fine-tune quality
-- QLoRA enables fine-tuning 65B+ models on a single GPU
-- Always use gradient checkpointing for memory efficiency
-- Merge LoRA weights back into the base model for inference
+- Prompt first, use RAG for knowledge, and fine-tune for consistent behaviour, style or format.
+- LoRA freezes the base model and trains small low-rank matrices (W + B·A), producing a compact adapter.
+- QLoRA loads the base model in 4-bit, making fine-tuning of large models possible on a single GPU.
+- A few hundred consistent, high-quality examples with a held-out test set beat large noisy datasets.
+- Always compare against a prompt-only baseline on held-out data before deciding a fine-tune is worth it.
+
+## Further Reading
+
+- Hu et al., *LoRA: Low-Rank Adaptation of Large Language Models* — [arXiv:2106.09685](https://arxiv.org/abs/2106.09685)
+- Dettmers et al., *QLoRA: Efficient Finetuning of Quantized LLMs* — [arXiv:2305.14314](https://arxiv.org/abs/2305.14314)
+- [Hugging Face TRL: SFT Trainer documentation](https://huggingface.co/docs/trl/sft_trainer)
+- [Hugging Face PEFT documentation](https://huggingface.co/docs/peft)

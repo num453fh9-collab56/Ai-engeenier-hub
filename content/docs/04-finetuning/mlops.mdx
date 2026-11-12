@@ -1,79 +1,220 @@
 ---
 title: "MLOps: Deploy & Monitor at Scale"
-description: "Model serving, observability, A/B testing, and CI/CD for ML pipelines."
+description: "Take an LLM feature from prototype to production: version prompts and models, gate releases with evals in CI, serve open models with vLLM, roll out safely with canaries and A/B tests, and monitor quality, latency and cost."
 category: "04-finetuning"
 order: 3
 difficulty: "advanced"
 tags:
   - mlops
-  - deployment
+  - llmops
+  - vllm
   - monitoring
-  - kubernetes
-  - ci-cd
+  - deployment
 slug: "mlops"
 ---
 
-## Introduction
+## Why This Matters
 
-MLOps applies DevOps principles to machine learning. This guide covers model serving, observability, A/B testing, and CI/CD for production ML systems.
+Your RAG assistant works beautifully in the demo. Then it goes live:
 
-## Model Serving with vLLM
+- A teammate "improves" the prompt on Friday; on Monday, support tickets double — and nobody knows which change caused it.
+- The provider retires the model you hard-coded.
+- Costs triple in a week because one customer's integration loops.
+- A user reports a wrong answer, and you have no record of what the model saw or said.
+
+None of these are model problems. They are **operations** problems. **MLOps** — for LLM apps often called **LLMOps** — is the discipline of shipping AI features reliably: versioning, testing, deploying, monitoring and improving them like any other critical software, plus the parts unique to LLMs (prompts, evals, token costs, non-deterministic outputs).
+
+By the end of this lesson you will be able to:
+
+- describe the LLMOps lifecycle and what to version,
+- block bad releases with automated eval gates,
+- serve an open model with vLLM behind an OpenAI-compatible API,
+- roll out changes safely with canaries and A/B tests,
+- log the right signals to monitor quality, latency and cost.
+
+## The LLMOps Lifecycle
+
+The animated diagram at the top of this page shows the loop:
+
+1. **Version** — every model, prompt, retrieval setting and dataset has an ID.
+2. **Evaluate** — automated tests run on every change; releases are blocked if quality drops.
+3. **Serve** — the model runs behind a stable API with timeouts, limits and fallbacks.
+4. **Roll out** — new versions reach a small share of traffic first.
+5. **Monitor** — latency, cost, errors and quality signals are tracked continuously.
+6. **Improve** — failures from production become new test cases, and the loop repeats.
+
+### What to version
+
+| Artifact | Why |
+|---|---|
+| **Prompts** (system prompts, templates, tool descriptions) | A one-word change can shift behaviour; you must know which version produced each answer |
+| **Model** (provider, model ID, or your fine-tuned adapter) | Providers update and retire models; outputs differ between versions |
+| **Retrieval config** (chunking, embedding model, top-k) | Retrieval changes alter answers as much as prompt changes |
+| **Eval datasets** | Scores are only comparable on the same test set |
+| **Parameters** (temperature, max tokens) | They change quality, cost and latency |
+
+Store prompts and configs **in your repository** (not only in a dashboard), reviewed like code, and log the version IDs with every request.
+
+## Release Safety: Eval Gates in CI
+
+Treat quality like a unit test. On every pull request that touches prompts, models or retrieval, run your golden test set (see [RAG Evaluation](/docs/02-rag/rag-eval)) and fail the build if key metrics drop.
 
 ```python
-from vllm import LLM, SamplingParams
+# tests/test_quality.py — run with pytest in CI
+import json
+from my_app import answer_question          # your pipeline
+from my_app.scoring import score_answer     # exact match, rubric, or LLM judge
 
-llm = LLM(model="meta-llama/Llama-2-7b-hf")
-params = SamplingParams(temperature=0.7, max_tokens=256)
+GOLDEN = [json.loads(line) for line in open("evals/golden_v3.jsonl", encoding="utf-8")]
+MIN_SCORE = 0.85
 
-outputs = llm.generate(["Explain MLOps"], params)
-print(outputs[0].outputs[0].text)
+def test_answer_quality():
+    scores = [score_answer(row, answer_question(row["question"])) for row in GOLDEN]
+    avg = sum(scores) / len(scores)
+    worst = sorted(zip(scores, (r["question"] for r in GOLDEN)))[:5]
+    assert avg >= MIN_SCORE, f"Quality {avg:.2f} < {MIN_SCORE}. Worst cases: {worst}"
 ```
 
-## Observability Stack
+Tips: keep the gate fast (a few dozen cases), use a fixed judge model, and print the worst cases so failures are easy to debug.
+
+## Serving Open Models with vLLM
+
+When you run open-weight or fine-tuned models yourself, you need an efficient serving engine. **vLLM** is a widely used open-source option. Its key ideas:
+
+- **PagedAttention** (Kwon et al., 2023) manages the attention key–value cache in small blocks, like virtual memory pages, so far less GPU memory is wasted.
+- **Continuous batching** adds new requests to the running batch as soon as others finish, keeping the GPU busy and increasing throughput.
+- An **OpenAI-compatible server**, so your application code barely changes.
+
+Following the vLLM quickstart, start a server (on a machine with a suitable GPU):
+
+```bash
+pip install vllm
+vllm serve Qwen/Qwen2.5-1.5B-Instruct        # listens on http://localhost:8000 by default
+```
+
+Then call it with the standard OpenAI client:
 
 ```python
-import mlflow
+from openai import OpenAI
 
-mlflow.set_tracking_uri("http://localhost:5000")
-
-with mlflow.start_run():
-    mlflow.log_param("model", "llama-7b")
-    mlflow.log_metric("latency_ms", 450)
-    mlflow.log_metric("throughput_tps", 120)
-    mlflow.register_model("runs:/<run_id>/model", "production-model")
+local = OpenAI(base_url="http://localhost:8000/v1", api_key="EMPTY")
+r = local.chat.completions.create(
+    model="Qwen/Qwen2.5-1.5B-Instruct",
+    messages=[{"role": "user", "content": "Give me one tip for monitoring LLM apps."}],
+)
+print(r.choices[0].message.content)
 ```
 
-## A/B Testing
+**Self-host or use an API?** Self-hosting gives control, privacy and potentially lower cost at high steady volume, but you own GPUs, scaling, upgrades and on-call. Hosted APIs (including fast-inference providers — see [Groq](/docs/04-finetuning/groq-inference)) are simpler for most teams until volume or data rules justify the switch.
+
+## Safe Rollouts: Canary and A/B Tests
+
+Never switch 100% of traffic to a new prompt or model at once.
+
+- **Shadow:** run the new version on copies of real requests without showing results to users; compare offline.
+- **Canary:** send a small share (for example 5%) to the new version and watch errors, latency and feedback.
+- **A/B test:** split users between versions and compare a business metric — resolution rate, thumbs-up rate, conversions.
+
+Assign users **deterministically**, so each person consistently sees one version:
 
 ```python
-import random
+import hashlib
 
-def select_model(user_id: str) -> str:
-    hash_val = hash(user_id) % 100
-    if hash_val < 10:    return "model-v2-canary"
-    if hash_val < 50:    return "model-v2-50pct"
-    return "model-v1-control"
+def variant_for(user_id: str, rollout_percent: int = 10) -> str:
+    bucket = int(hashlib.sha256(user_id.encode()).hexdigest(), 16) % 100
+    return "candidate" if bucket < rollout_percent else "stable"
 ```
 
-## CI/CD Pipeline
+Keep a **kill switch** (a config flag) to send everyone back to the stable version instantly.
 
-```yaml
-# .github/workflows/ml-pipeline.yml
-name: ML Pipeline
-on: [push]
-jobs:
-  train:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: python train.py
-      - run: python evaluate.py
-      - run: python deploy.py --environment staging
+## Monitoring: What to Log
+
+Log one structured record per request:
+
+```python
+import json, time, uuid
+
+PRICE_PER_1M = {"input": 0.50, "output": 1.50}    # example prices — use your provider's real pricing
+
+def logged_call(client, *, model, messages, prompt_version, user_id):
+    start = time.perf_counter()
+    r = client.chat.completions.create(model=model, messages=messages)
+    latency = time.perf_counter() - start
+    u = r.usage
+    record = {
+        "id": str(uuid.uuid4()),
+        "ts": time.time(),
+        "user": user_id,
+        "model": model,
+        "prompt_version": prompt_version,
+        "latency_s": round(latency, 3),
+        "input_tokens": u.prompt_tokens,
+        "output_tokens": u.completion_tokens,
+        "cost_usd": round(u.prompt_tokens / 1e6 * PRICE_PER_1M["input"]
+                          + u.completion_tokens / 1e6 * PRICE_PER_1M["output"], 6),
+    }
+    with open("llm_requests.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(record) + "\n")
+    return r
 ```
+
+Then watch these signals on a dashboard:
+
+| Category | Signals |
+|---|---|
+| **Reliability** | Error rate, timeouts, fallbacks used |
+| **Speed** | p50 / p95 latency, time to first token |
+| **Cost** | Tokens and cost per request, per user, per feature, per day |
+| **Quality** | User feedback, eval scores on sampled traffic, refusal rate, "I don't know" rate |
+| **Safety** | Guardrail blocks, flagged content, prompt-injection attempts |
+
+Dedicated LLM observability tools (Langfuse, LangSmith, Arize Phoenix, Weights & Biases and others — compare them in the [AI Tools Directory](/directory)) add traces, prompt management and evals on top of this.
+
+## Mini Project: A Production-Ready LLM Gateway
+
+Build `llm_gateway.py`, a small module every feature in your app calls instead of calling providers directly:
+
+1. **Config file** (`llm_config.yaml`) with model IDs, prompt versions, timeouts and rollout percentage.
+2. **`call()` function** that picks stable or candidate by `variant_for(user_id)`, applies a timeout, falls back to a second provider on failure, and writes the JSONL log record above.
+3. **Budget guard:** reject requests when a user exceeds a daily token limit.
+4. **Report script** that reads `llm_requests.jsonl` and prints p50/p95 latency, error rate and cost per variant.
+5. **CI gate:** add the pytest quality test and make it fail on purpose once (change the prompt badly) to see it protect you.
+
+**Stretch goals**
+
+1. Send logs to an observability tool instead of a file.
+2. Add a nightly job that samples 50 production requests and scores them with your eval suite.
+3. Serve a model with vLLM and route 10% of traffic to it as a canary.
+
+## Common Mistakes
+
+1. **Prompts that live only in someone's dashboard.** If it isn't versioned and reviewed, it will be changed without anyone knowing.
+2. **No eval gate.** Every change is a gamble until quality is tested automatically.
+3. **Big-bang releases.** Roll out gradually and keep a kill switch.
+4. **Logging nothing — or everything.** Log structured metadata always; log full prompts and answers only where privacy rules allow, with retention limits.
+5. **Watching averages only.** p95 latency and per-user cost reveal the real problems.
+6. **No budget limits.** One runaway loop or abusive user can generate a huge bill.
+7. **Hard-coded model IDs.** Keep them in config so a retirement or upgrade is a one-line change.
+
+## Production Tips
+
+- **One gateway, many features:** central place for retries, fallbacks, logging, budgets and routing.
+- **Feedback loop:** every thumbs-down or escalation becomes a candidate test case.
+- **Data privacy:** mask personal data in logs and know where your provider stores data.
+- **Capacity planning:** watch rate limits and tokens per minute before launches and marketing pushes.
+- **Runbooks:** write down what to do when latency spikes, costs jump or quality drops — before it happens.
 
 ## Key Takeaways
 
-- Use dedicated model serving frameworks (vLLM, TGI, Triton) for production
-- Log all metrics with MLflow or similar for traceability
-- Implement gradual rollouts with canary deployments
-- Monitor drift, latency, and throughput continuously
+- LLMOps applies software discipline to AI features: version, evaluate, serve, roll out, monitor, improve.
+- Version prompts, models, retrieval settings and eval sets, and log their IDs with every request.
+- Automated eval gates in CI stop quality regressions before users see them.
+- vLLM serves open models efficiently (PagedAttention, continuous batching) behind an OpenAI-compatible API.
+- Roll out with shadow, canary and A/B tests, and monitor reliability, latency, cost, quality and safety together.
+
+## Further Reading
+
+- Kwon et al., *Efficient Memory Management for Large Language Model Serving with PagedAttention* — [arXiv:2309.06180](https://arxiv.org/abs/2309.06180)
+- [vLLM documentation: Quickstart](https://docs.vllm.ai/en/latest/getting_started/quickstart.html)
+- Google, *Rules of Machine Learning* — [developers.google.com](https://developers.google.com/machine-learning/guides/rules-of-ml)
+- Related lessons: [RAG Evaluation](/docs/02-rag/rag-eval) · [Groq: Fast Inference](/docs/04-finetuning/groq-inference)
