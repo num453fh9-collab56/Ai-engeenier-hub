@@ -239,3 +239,25 @@ pre code > span::before {
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-up, .animate-aurora, .animate-gradient-x { animation: none; }
 }
+
+/* Certificate printing: show only the certificate */
+@media print {
+  body:has(.certificate) * { visibility: hidden; }
+  body:has(.certificate) .certificate,
+  body:has(.certificate) .certificate * { visibility: visible; }
+  body:has(.certificate) .certificate {
+    position: fixed; inset: 0; margin: auto; width: 100%; border-radius: 0;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  @page { size: A4 landscape; margin: 0; }
+}
+
+/* Book printing: hide site chrome, one chapter per page */
+@media print {
+  body:has(.book) > *:not(:has(.book)) { display: none !important; }
+  body:has(.book) header:not(.book-cover), body:has(.book) footer,
+  body:has(.book) [class*="fixed"] { display: none !important; }
+  .book-chapter { break-before: page; }
+  .book pre { white-space: pre-wrap; word-break: break-word; }
+  .book-cover nav a { color: inherit; text-decoration: none; }
+}

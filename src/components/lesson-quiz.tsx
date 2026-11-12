@@ -3,6 +3,7 @@
 import { useState, useSyncExternalStore } from "react";
 import { CheckCircle2, XCircle, Trophy, RotateCcw } from "lucide-react";
 import type { QuizQuestion } from "@/lib/quizzes";
+import { setCompleted } from "@/lib/progress";
 
 function subscribe(cb: () => void) {
   window.addEventListener("quiz-score", cb);
@@ -42,6 +43,8 @@ export function LessonQuiz({ id, questions }: { id: string; questions: QuizQuest
         localStorage.setItem(key, String(Math.max(best ?? 0, s)));
         window.dispatchEvent(new Event("quiz-score"));
       } catch {}
+      // Passing the quiz (2/3 or better) marks the lesson complete
+      if (s / questions.length >= 0.66) setCompleted(id, true);
     }
   }
 

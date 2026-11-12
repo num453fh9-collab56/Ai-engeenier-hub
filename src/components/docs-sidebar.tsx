@@ -3,14 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, FileText, Book, Menu, X } from "lucide-react";
+import { ChevronDown, FileText, Book, Menu, X, CheckCircle2 } from "lucide-react";
+import { useProgress } from "@/lib/progress";
+import { TRACK_LABELS } from "@/lib/track-labels";
 import type { DocNode } from "@/lib/mdx";
 
-const categoryLabel: Record<string, string> = {
-  "01-foundations": "Foundations",
-  "02-rag": "RAG",
-  "03-agents": "Agents",
-};
+const categoryLabel = TRACK_LABELS;
 
 export function DocsSidebar({
   docsByCategory,
@@ -27,6 +25,7 @@ export function DocsSidebar({
   });
 
   const [mobileOpen, setMobileOpen] = useState(false);
+  const progress = useProgress();
 
   const toggle = (category: string) => {
     setExpanded((prev) => ({ ...prev, [category]: !prev[category] }));
@@ -77,7 +76,11 @@ export function DocsSidebar({
                             : "text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground"
                         }`}
                       >
-                        <FileText className="size-3 shrink-0" />
+                        {progress.completed[`${doc.category}/${doc.slug}`] ? (
+                          <CheckCircle2 className="size-3 shrink-0 text-emerald-500" />
+                        ) : (
+                          <FileText className="size-3 shrink-0" />
+                        )}
                         <span className="truncate">{doc.title}</span>
                       </Link>
                     );

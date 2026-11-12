@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Radio, Workflow, BarChart3, BookText, Library, Route, FlaskConical } from "lucide-react";
+import { Radio, Workflow, BarChart3, BookText, Library, Route, FlaskConical, Trophy } from "lucide-react";
 import { SearchCommand } from "@/components/search-command";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Button } from "@/components/ui/button";
@@ -57,6 +57,13 @@ export function Header() {
             <Link href="/glossary" aria-label="Glossary">
               <Library className="size-3.5" />
               <span className="hidden md:inline">Glossary</span>
+            </Link>
+          </Button>
+
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/progress" aria-label="My progress">
+              <Trophy className="size-3.5" />
+              <span className="hidden xl:inline">Progress</span>
             </Link>
           </Button>
 

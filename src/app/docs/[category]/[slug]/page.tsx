@@ -13,6 +13,7 @@ import { quizzes } from "@/lib/quizzes";
 import { toPlain } from "@/lib/plain-text";
 import { LessonQuiz } from "@/components/lesson-quiz";
 import { LessonTutor } from "@/components/lesson-tutor";
+import { LessonComplete } from "@/components/lesson-complete";
 
 interface PageProps {
   params: Promise<{ category: string; slug: string }>;
@@ -94,6 +95,11 @@ export default async function DocPage({ params }: PageProps) {
 
   if (doc) {
     const headings = extractHeadings(doc.content);
+    const ordered = getAllDocs().sort(
+      (a, b) => a.category.localeCompare(b.category) || a.order - b.order
+    );
+    const idx = ordered.findIndex((d) => d.category === category && d.slug === slug);
+    const next = idx >= 0 ? ordered[idx + 1] : undefined;
     const rt = readingTime(doc.content);
 
     const jsonLd = {
@@ -170,6 +176,11 @@ export default async function DocPage({ params }: PageProps) {
               questions={quizzes[`${category}/${slug}`]}
             />
           )}
+          <LessonComplete
+            id={`${category}/${slug}`}
+            nextHref={next ? `/docs/${next.category}/${next.slug}` : undefined}
+            nextTitle={next?.title}
+          />
           <LessonTutor title={doc.title} context={toPlain(doc.content).slice(0, 5000)} />
           <Newsletter variant="compact" />
         </article>

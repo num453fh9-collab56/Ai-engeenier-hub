@@ -13,6 +13,7 @@ import { CurriculumRoadmap } from "@/components/curriculum-roadmap";
 import { HeroDemo } from "@/components/hero-demo";
 import { getAllDocs } from "@/lib/mdx";
 import { glossary } from "@/lib/glossary";
+import { getTracks } from "@/lib/tracks";
 
 const technologies = [
   { label: "OpenAI" },
@@ -24,49 +25,20 @@ const technologies = [
   { label: "Groq" },
 ];
 
-const volumes = [
-  {
-    vol: "Vol. 1",
-    title: "Foundations",
-    description: "Math, ML fundamentals, Python, and tooling setup.",
-    gradient: "from-blue-600/20 to-indigo-600/10",
-  },
-  {
-    vol: "Vol. 2",
-    title: "Deep Learning",
-    description: "Neural networks, CNNs, RNNs, transformers, and vision.",
-    gradient: "from-purple-600/20 to-pink-600/10",
-  },
-  {
-    vol: "Vol. 3",
-    title: "Language",
-    description: "NLP, LLMs from scratch, tokenization, and alignment.",
-    gradient: "from-emerald-600/20 to-teal-600/10",
-  },
-  {
-    vol: "Vol. 4",
-    title: "LLMs & RAG",
-    description: "Fine-tuning, prompt engineering, RAG, and multimodal.",
-    gradient: "from-amber-600/20 to-orange-600/10",
-  },
-  {
-    vol: "Vol. 5",
-    title: "Agents",
-    description: "ReAct, multi-agent swarms, tools, and autonomous systems.",
-    gradient: "from-rose-600/20 to-red-600/10",
-  },
-  {
-    vol: "Vol. 6",
-    title: "Production",
-    description: "MLOps, serving, safety, alignment, and capstone projects.",
-    gradient: "from-cyan-600/20 to-sky-600/10",
-  },
+const trackGradients = [
+  "from-blue-600/20 to-indigo-600/10",
+  "from-amber-600/20 to-orange-600/10",
+  "from-rose-600/20 to-red-600/10",
+  "from-cyan-600/20 to-sky-600/10",
+  "from-emerald-600/20 to-teal-600/10",
+  "from-purple-600/20 to-pink-600/10",
 ];
 
 export default function Home() {
   const docs = getAllDocs();
   const lessonCount = docs.length;
-  const trackCount = new Set(docs.map((d) => d.category)).size;
+  const tracks = getTracks();
+  const trackCount = tracks.length;
 
   return (
     <div className="flex flex-col flex-1">
@@ -170,52 +142,47 @@ export default function Home() {
 
       <CurriculumRoadmap />
 
-      {/* Compiled Book Editions */}
+      {/* Compiled Track Books */}
       <section className="px-4 py-20">
         <div className="mx-auto max-w-5xl">
           <div className="text-center mb-12">
             <h2 className="text-2xl font-bold tracking-tight mb-3">
-              Compiled Book Editions
+              Read Offline: Full Track Books
             </h2>
             <p className="text-muted-foreground max-w-md mx-auto">
-              Six volumes covering the complete AI Engineering curriculum.
-              Download EPUB or PDF for offline reading.
+              Every lesson in a track compiled into one book. Save it as a
+              PDF or download the Markdown — free.
             </p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {volumes.map((vol, i) => (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {tracks.map((t, i) => (
               <div
-                key={vol.vol}
+                key={t.category}
                 className="group relative overflow-hidden rounded-xl border border-border/60 bg-card transition-all duration-300 hover:shadow-md hover:border-primary/30"
               >
-                <div className={`h-24 bg-gradient-to-br ${vol.gradient} flex items-center justify-center`}>
+                <div className={`h-24 bg-gradient-to-br ${trackGradients[i % trackGradients.length]} flex items-center justify-center`}>
                   <BookOpen className="size-8 text-foreground/15" />
                   <span className="absolute top-3 left-3 inline-flex items-center rounded-md bg-background/80 px-2 py-0.5 text-xs font-semibold">
-                    {vol.vol}
+                    {t.lessons.length} lessons
                   </span>
                 </div>
                 <div className="p-4">
-                  <h3 className="text-sm font-semibold mb-1">{vol.title}</h3>
-                  <p className="text-xs text-muted-foreground mb-4">
-                    {vol.description}
-                  </p>
+                  <h3 className="text-sm font-semibold mb-3">{t.label}</h3>
                   <div className="flex gap-2">
+                    <Link
+                      href={`/books/${t.category}`}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent"
+                    >
+                      <BookOpen className="size-3.5" />
+                      Read / PDF
+                    </Link>
                     <a
-                      href={`/api/download?volume=${i + 1}&format=epub`}
-                      download
+                      href={`/api/download?track=${t.category}`}
                       className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent"
                     >
                       <FileDown className="size-3.5" />
-                      EPUB
-                    </a>
-                    <a
-                      href={`/api/download?volume=${i + 1}&format=pdf`}
-                      download
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent"
-                    >
-                      <FileDown className="size-3.5" />
-                      PDF
+                      .md
                     </a>
                   </div>
                 </div>
