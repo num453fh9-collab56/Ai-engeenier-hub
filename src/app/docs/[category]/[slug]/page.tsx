@@ -9,6 +9,10 @@ import { Newsletter } from "@/components/newsletter";
 import { mdxComponents } from "@/components/mdx-components";
 import { DocFallback } from "@/components/doc-fallback";
 import { courses } from "@/lib/course-data";
+import { quizzes } from "@/lib/quizzes";
+import { toPlain } from "@/lib/plain-text";
+import { LessonQuiz } from "@/components/lesson-quiz";
+import { LessonTutor } from "@/components/lesson-tutor";
 
 interface PageProps {
   params: Promise<{ category: string; slug: string }>;
@@ -160,6 +164,13 @@ export default async function DocPage({ params }: PageProps) {
               }}
             />
           </div>
+          {quizzes[`${category}/${slug}`] && (
+            <LessonQuiz
+              id={`${category}/${slug}`}
+              questions={quizzes[`${category}/${slug}`]}
+            />
+          )}
+          <LessonTutor title={doc.title} context={toPlain(doc.content).slice(0, 5000)} />
           <Newsletter variant="compact" />
         </article>
         <TableOfContents headings={headings} />

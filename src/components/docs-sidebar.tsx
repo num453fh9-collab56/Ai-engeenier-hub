@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, FileText, Book, Menu, X } from "lucide-react";
@@ -27,10 +27,6 @@ export function DocsSidebar({
   });
 
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
 
   const toggle = (category: string) => {
     setExpanded((prev) => ({ ...prev, [category]: !prev[category] }));
@@ -74,6 +70,7 @@ export function DocsSidebar({
                       <Link
                         key={href}
                         href={href}
+                        onClick={() => setMobileOpen(false)}
                         className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
                           isActive
                             ? "bg-accent font-medium text-accent-foreground"

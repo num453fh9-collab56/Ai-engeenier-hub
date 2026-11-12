@@ -6,8 +6,9 @@ const SYSTEM_PROMPT =
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { messages } = body as {
+    const { messages, context } = body as {
       messages: { role: "user" | "assistant"; content: string }[];
+      context?: string;
     };
 
     if (!messages || !Array.isArray(messages)) {
@@ -37,8 +38,20 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
           messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            ...messages,
+            {
+              role: "system",
+              content:
+                typeof context === "string" && context.trim()
+                  ? `${SYSTEM_PROMPT}
+
+Use the following reference material to answer. If it doesn't cover the question, say so briefly and answer from general knowledge.
+
+---
+${context.slice(0, 6000)}
+---`
+                  : SYSTEM_PROMPT,
+            },
+            ...messages.slice(-10),
           ],
           temperature: 0.7,
           max_tokens: 512,
