@@ -1,6 +1,6 @@
 ---
 title: "RAG Evaluation with RAGAS"
-description: "Measure faithfulness, relevance, and precision of your RAG pipelines."
+description: "Stop guessing whether your RAG system is good. Build a golden test set, measure retrieval (hit rate, MRR, context recall) and generation (faithfulness, relevancy) with RAGAS, and catch regressions before your users do."
 category: "02-rag"
 order: 3
 difficulty: "intermediate"
@@ -13,55 +13,221 @@ tags:
 slug: "rag-eval"
 ---
 
-## Introduction
+## Why This Matters
 
-RAGAS (RAG Assessment) provides automated metrics for evaluating RAG pipeline quality: faithfulness, answer relevance, context precision, and context recall.
+You change your chunk size from 500 to 1,000 tokens. The demo questions still look fine. Two weeks later a customer complains that the bot "made up" a refund policy — and nobody can say whether it got worse after your change or was always like that.
 
-## Key Metrics
+This is the most common way RAG projects fail: **they are tested by vibes.** A few hand-picked questions look good, so it ships. Every later change — a new embedding model, a different prompt, hybrid search, a cheaper LLM — is a gamble.
 
-| Metric | What It Measures | Range |
-|--------|-----------------|-------|
-| Faithfulness | Is the answer grounded in the context? | 0-1 |
-| Answer Relevance | Does the answer address the question? | 0-1 |
-| Context Precision | Are retrieved docs relevant? | 0-1 |
-| Context Recall | Are all relevant docs retrieved? | 0-1 |
+**Evaluation** turns those gambles into numbers. With a fixed set of test questions and a handful of metrics, every change gets a clear score: better, worse, or no difference. That is what separates a demo from a product.
 
-## RAGAS Evaluation
+By the end of this lesson you will be able to:
+
+- explain *where* a RAG system can fail and which metric catches each failure,
+- build a small "golden" test set,
+- measure retrieval quality with hit rate and MRR (no LLM needed),
+- score faithfulness and context recall with the RAGAS library,
+- run evaluation automatically before every release.
+
+## Where RAG Systems Fail
+
+A RAG answer is produced in two steps, and each step fails in its own way (see the animated diagram at the top of this page):
+
+1. **Retrieval** — did we fetch the right chunks?
+   - *Missing context:* the answer exists in your documents, but the retriever didn't find it.
+   - *Noisy context:* relevant chunks are buried among irrelevant ones, which distracts the model.
+2. **Generation** — did the LLM use those chunks well?
+   - *Hallucination:* the answer contains claims that aren't in the context.
+   - *Off-target answer:* everything is true, but it doesn't answer the question that was asked.
+
+If you only measure the final answer, you can't tell which step broke. So we measure both halves separately.
+
+## The Metrics
+
+### Retrieval metrics (cheap, no LLM required)
+
+When you know which chunk(s) *should* be retrieved for each test question, you can score the retriever with simple arithmetic:
+
+| Metric | Question it answers | How it's computed |
+|---|---|---|
+| **Hit rate@k** | Did a correct chunk appear in the top k at all? | Share of questions with at least one correct chunk in the top k |
+| **MRR** (Mean Reciprocal Rank) | How high was the first correct chunk? | Average of 1 / (rank of first correct chunk); 0 if none |
+| **Recall@k** | Of all the correct chunks, how many did we get? | Correct chunks in top k ÷ all correct chunks |
+
+These run in milliseconds, so you can test dozens of retriever settings quickly.
+
+### RAGAS metrics (LLM-assisted)
+
+**RAGAS** is an open-source library that uses an LLM as a judge to score aspects that are hard to compute with plain code:
+
+| RAGAS metric | Measures | Catches |
+|---|---|---|
+| **Faithfulness** | Share of the answer's claims that are supported by the retrieved context | Hallucinations |
+| **Response relevancy** | Whether the answer actually addresses the question | Off-target answers |
+| **Context precision** | Whether the relevant chunks are ranked near the top | Noisy context |
+| **Context recall** | Whether the retrieved context contains everything needed for the reference answer | Missing context |
+| **Factual correctness** | How well the answer's facts match a reference answer | Wrong answers |
+
+Scores run from 0 to 1. Context recall and factual correctness need a **reference** (a correct answer written by a human) for each question; faithfulness and relevancy don't.
+
+**Important:** LLM judges are useful but not perfect. They can be inconsistent between runs, prefer longer answers, and they cost money per evaluation. Use them to track trends and compare versions, and regularly check a sample of scores by hand.
+
+## Step 1: Build a Golden Test Set
+
+Your test set is the most valuable artifact in the project — more valuable than any metric. Each row contains:
+
+- **question** — phrased the way real users phrase things (typos included),
+- **reference answer** — a short, correct answer,
+- **relevant chunk IDs** — the source passages that contain the answer.
+
+Good sources for questions: real support tickets, search logs, and questions from domain experts. Aim for variety — easy lookups, questions needing two chunks, questions whose answer is *not* in your documents (the correct behaviour is to say so), and tricky phrasings.
+
+Start with **30–50** questions. That is enough to spot large regressions; grow it as you find new failure cases. LLMs can draft extra questions from your documents, but have a human review every one.
 
 ```python
-from ragas import evaluate
-from ragas.metrics import faithfulness, answer_relevancy
-from datasets import Dataset
-
-data = Dataset.from_dict({
-    "question": ["What is RAG?"],
-    "answer": ["RAG retrieves documents before generating answers."],
-    "contexts": [["RAG stands for Retrieval-Augmented Generation."]],
-})
-
-results = evaluate(data, metrics=[faithfulness, answer_relevancy])
-print(results)
+golden = [
+    {
+        "question": "How long do I have to request a refund?",
+        "reference": "Refunds can be requested within 30 days of purchase.",
+        "relevant_ids": ["refund-policy#0"],
+    },
+    {
+        "question": "what does error E1042 mean",
+        "reference": "E1042 is a payment gateway timeout; retry after 30 seconds.",
+        "relevant_ids": ["errors#e1042"],
+    },
+    # ... 30–50 rows
+]
 ```
 
-## Building an Evaluation Pipeline
+## Step 2: Measure Retrieval (No API Key Needed)
 
 ```python
-def evaluate_rag_pipeline(
-    questions: list[str],
-    ground_truth: list[str],
-) -> dict:
-    answers = [rag_pipeline(q) for q in questions]
-    data = Dataset.from_dict({
-        "question": questions,
-        "answer": answers,
-        "contexts": [["...relevant docs..."]] * len(questions),
+def evaluate_retriever(search, golden, k: int = 5) -> dict:
+    """search(question, k) must return a list of chunk IDs, best first."""
+    hits, reciprocal_ranks, recalls = 0, [], []
+    for row in golden:
+        results = search(row["question"], k)
+        relevant = set(row["relevant_ids"])
+
+        first_rank = next((i for i, cid in enumerate(results, start=1) if cid in relevant), None)
+        hits += first_rank is not None
+        reciprocal_ranks.append(1 / first_rank if first_rank else 0.0)
+        recalls.append(len(relevant & set(results)) / len(relevant))
+
+    n = len(golden)
+    return {
+        f"hit_rate@{k}": hits / n,
+        "mrr": sum(reciprocal_ranks) / n,
+        f"recall@{k}": sum(recalls) / n,
+    }
+
+print(evaluate_retriever(dense_search, golden))
+print(evaluate_retriever(hybrid_search, golden))
+```
+
+Run it for every retriever variant you're considering — dense, BM25, hybrid, different chunk sizes — and keep a table of the results. Decisions become obvious.
+
+## Step 3: Score Answers with RAGAS
+
+The example below follows the current RAGAS "evaluate a RAG system" guide: build an `EvaluationDataset` with the fields `user_input`, `retrieved_contexts`, `response` and `reference`, then call `evaluate` with an evaluator LLM.
+
+```python
+# pip install ragas langchain-openai
+from langchain_openai import ChatOpenAI
+from ragas import EvaluationDataset, evaluate
+from ragas.llms import LangchainLLMWrapper
+from ragas.metrics import Faithfulness, LLMContextRecall, FactualCorrectness
+
+samples = []
+for row in golden:
+    contexts = retrieve_texts(row["question"])          # your retriever → list[str]
+    answer = generate_answer(row["question"], contexts)  # your RAG pipeline → str
+    samples.append({
+        "user_input": row["question"],
+        "retrieved_contexts": contexts,
+        "response": answer,
+        "reference": row["reference"],
     })
-    return evaluate(data, metrics=[faithfulness, answer_relevancy, context_precision])
+
+dataset = EvaluationDataset.from_list(samples)
+judge = LangchainLLMWrapper(ChatOpenAI(model="gpt-4o-mini"))  # any capable chat model
+
+result = evaluate(
+    dataset=dataset,
+    metrics=[LLMContextRecall(), Faithfulness(), FactualCorrectness()],
+    llm=judge,
+)
+print(result)                 # e.g. {'context_recall': ..., 'faithfulness': ..., 'factual_correctness': ...}
+df = result.to_pandas()       # per-question scores — read the worst rows!
 ```
+
+RAGAS's API has changed between versions; if an import fails, check the version you installed against the [official guide](https://docs.ragas.io/en/stable/getstarted/rag_eval/).
+
+**Read the worst rows, not just the averages.** An average faithfulness of 0.85 can hide five answers that invented a policy. Sorting the per-question table by score is where you find real bugs.
+
+## Mini Project: A Retrieval Report Card
+
+Combine this lesson with the [Hybrid Search](/docs/02-rag/hybrid-search) mini project to prove — with numbers — which retriever is best for your data. No API keys required.
+
+1. Take the eight documents from the hybrid search project and give each an ID (`doc-0` … `doc-7`).
+2. Write **12 test questions**, each with the ID of the document that answers it. Include exact-code questions (*"what is E2001?"*), paraphrased questions (*"my card keeps getting rejected"*) and one question with no answer in the documents.
+3. Wrap `bm25_search`, `dense_search`, hybrid (RRF) and hybrid + re-rank so each returns document IDs.
+4. Run `evaluate_retriever` on all four and print a table:
+
+```python
+import pandas as pd
+
+retrievers = {
+    "BM25": bm25_ids,
+    "Dense": dense_ids,
+    "Hybrid (RRF)": hybrid_ids,
+    "Hybrid + re-rank": reranked_ids,
+}
+report = pd.DataFrame(
+    {name: evaluate_retriever(fn, golden, k=3) for name, fn in retrievers.items()}
+).T
+print(report.round(2))
+```
+
+5. Look at the questions each retriever got wrong. Can you explain why?
+
+**Stretch goals**
+
+1. Add an LLM generation step and score it with RAGAS faithfulness.
+2. Change one thing (chunk size, `k`, embedding model) and re-run — did the scores move?
+3. Save the report to a CSV with the date, so you can track progress over time.
+
+## Common Mistakes
+
+1. **Testing only with questions you wrote while building.** You'll unconsciously use the same words as your documents. Use real user phrasing.
+2. **Only looking at the final answer.** Measure retrieval and generation separately, or you won't know what to fix.
+3. **Trusting the average.** Inspect the lowest-scoring questions every time.
+4. **Changing the test set and the system at the same time.** Then score changes mean nothing. Freeze the set; add new cases in a separate version.
+5. **Treating LLM-judge scores as exact.** Small differences (0.81 vs 0.83) can be noise. Run more than once, or use more questions, before deciding.
+6. **Forgetting "no answer" questions.** A good system says *"I don't know"* when the documents don't cover something. Test for it explicitly.
+7. **Evaluating once.** Quality drifts as documents, models and prompts change. Evaluation is a habit, not a milestone.
+
+## Production Tips
+
+- **Run evals in CI.** Re-run the golden set on every pull request that touches prompts, chunking, retrieval or models, and fail the build if a key metric drops past a threshold you choose.
+- **Version everything.** Record the test-set version, model names, prompt version and retriever settings next to every score.
+- **Use a cheaper judge for daily runs** and a stronger one for release decisions — and spot-check both by hand.
+- **Sample production traffic.** Log real questions, retrieved chunk IDs and answers; periodically score a sample and add failures to the golden set.
+- **Collect user feedback.** Thumbs up/down and "this didn't answer my question" clicks are cheap, direct signals — and a great source of new test cases.
+- **Watch cost and latency too.** A configuration that scores 2% higher but doubles latency may not be worth it. Track all three together.
 
 ## Key Takeaways
 
-- Always evaluate RAG pipelines systematically before production deployment
-- Faithfulness is the most critical metric — hallucinations break user trust
-- Track metrics over time to catch regression after changes
-- Use synthetic test sets when human-annotated data is unavailable
+- Evaluate retrieval and generation separately: missing or noisy context vs hallucinated or off-target answers.
+- A small, realistic golden test set (30–50 questions with references and relevant chunk IDs) is the foundation of every improvement.
+- Hit rate, MRR and recall@k score your retriever instantly, with no LLM and no cost.
+- RAGAS adds LLM-judged metrics such as faithfulness and context recall — great for trends, but always read the worst cases by hand.
+- Run evaluation automatically on every change and track scores over time to catch regressions before users do.
+
+## Further Reading
+
+- [RAGAS documentation: Evaluate a simple RAG system](https://docs.ragas.io/en/stable/getstarted/rag_eval/)
+- Es, James, Espinosa-Anke & Schockaert, *RAGAS: Automated Evaluation of Retrieval Augmented Generation* — [arXiv:2309.15217](https://arxiv.org/abs/2309.15217)
+- Zheng et al., *Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena* — [arXiv:2306.05685](https://arxiv.org/abs/2306.05685) (on the strengths and biases of LLM judges)
+- Related lessons: [Vector Databases](/docs/02-rag/vector-dbs) · [Hybrid Search & Re-ranking](/docs/02-rag/hybrid-search)

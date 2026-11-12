@@ -1,6 +1,6 @@
 ---
 title: "Hybrid Search & Re-ranking in RAG"
-description: "Master hybrid search combining dense and sparse retrieval, plus cross-encoder re-ranking for production RAG systems"
+description: "Combine meaning-based (dense) and keyword-based (BM25) retrieval, fuse them with Reciprocal Rank Fusion, and re-rank with a cross-encoder — the retrieval recipe behind most production RAG systems, with a runnable project."
 category: "02-rag"
 order: 1
 difficulty: "advanced"
@@ -14,155 +14,254 @@ tags:
 slug: "hybrid-search"
 ---
 
-## Introduction
+## Why This Matters
 
-Retrieval-Augmented Generation (RAG) quality depends on retrieval quality. Dense vector search captures semantic meaning but misses exact keyword matches. Sparse search (BM25) excels at keyword precision but lacks semantic understanding.
+A developer asks your documentation bot: *"How do I fix error E1042?"*
 
-**Hybrid search** combines both, and **re-ranking** with cross-encoders delivers the final quality boost.
+- **Vector (dense) search** understands that the question is about fixing an error — but the number `E1042` means almost nothing to an embedding model. It happily returns three generic "troubleshooting" pages.
+- **Keyword (BM25) search** finds the one page that literally contains `E1042` — but if the user had asked *"why does checkout keep failing?"*, it would miss the page titled *"Resolving payment errors"*, because the words don't overlap.
 
-<Mermaid chart={`
-graph LR
-  subgraph User["User Query"]
-    Q["Query"]
-  end
+Real users ask both kinds of questions. **Hybrid search** runs both retrievers and merges their results, so you get meaning *and* exact matches. A **re-ranker** then reads the best candidates carefully and puts the truly relevant ones on top.
 
-  subgraph Dense["Dense Retrieval"]
-    E["Embedding Model"] --> VDB["Vector DB"]
-    VDB --> DS["Dense Scores"]
-  end
+Because an LLM can only answer from the chunks you give it, this retrieval step often improves RAG answers more than switching to a bigger model.
 
-  subgraph Sparse["Sparse Retrieval"]
-    BM25["BM25"] --> SS["Sparse Scores"]
-  end
+By the end of this lesson you will be able to:
 
-  subgraph Fusion["Fusion"]
-    RRF["Reciprocal Rank Fusion"] --> Combined["Combined Rankings"]
-  end
+- explain the strengths and blind spots of dense and sparse retrieval,
+- merge two ranked lists with Reciprocal Rank Fusion (RRF),
+- add a cross-encoder re-ranker in a two-stage pipeline,
+- build a hybrid search engine that runs on your laptop.
 
-  subgraph Rerank["Re-ranking"]
-    CE["Cross-Encoder"] --> Final["Final Results"]
-  end
+## How Hybrid Retrieval Works
 
-  Q --> E
-  Q --> BM25
-  DS --> RRF
-  SS --> RRF
-  Combined --> CE
-  Final --> Output["RAG Context"]
-`} />
+### 1. Dense retrieval: search by meaning
 
-## The Retrieval Spectrum
+Dense retrieval embeds the query and every chunk into vectors and returns the nearest ones (see [Vector Databases](/docs/02-rag/vector-dbs)). It handles synonyms, paraphrases and even other languages well. It is weaker with **rare tokens** — product codes, error numbers, names, new jargon — because the embedding model never learned what they mean.
 
-| Approach | Strengths | Weaknesses |
-|----------|-----------|------------|
-| Dense (embedding) | Semantic understanding, synonyms | Misses exact keywords, tail queries |
-| Sparse (BM25) | Exact match, term frequency | No semantic understanding |
-| Hybrid | Best of both | Higher latency, more complex |
+### 2. Sparse retrieval: search by words (BM25)
 
-## Building a Hybrid Retriever
+**BM25** is the classic ranking function used by search engines such as Elasticsearch and Lucene. It scores a document higher when:
 
-### Dense Retrieval with Embeddings
+- it contains the query's words, especially **rare** ones (a word that appears in few documents is a strong signal — this is the *inverse document frequency*);
+- the words appear several times, with diminishing returns (controlled by the parameter `k1`);
+- the document isn't unusually long (length normalization, controlled by `b`, usually `0.75`).
 
-```python
-from openai import OpenAI
-import numpy as np
+It's called *sparse* because each document is represented by the few words it contains, not by a dense vector. BM25 is fast, needs no model, and is excellent at exact matches — but it has no idea that "car" and "automobile" are related.
 
-client = OpenAI()
+| | Dense (embeddings) | Sparse (BM25) |
+|---|---|---|
+| Finds | Similar meaning, paraphrases | Exact words, codes, names |
+| Misses | Rare tokens, exact identifiers | Synonyms, rephrased questions |
+| Needs | An embedding model | Just text and a tokenizer |
+| Speed | Fast with an ANN index | Very fast with an inverted index |
 
-def embed(texts: list[str]) -> np.ndarray:
-    response = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=texts
-    )
-    return np.array([r.embedding for r in response.data])
+### 3. Fusion: merging two ranked lists with RRF
 
-def cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    return np.dot(a, b.T) / (np.linalg.norm(a, axis=1, keepdims=True) * np.linalg.norm(b, axis=1))
-```
+The two retrievers produce scores on completely different scales — cosine similarity is roughly −1 to 1, BM25 scores can be 0 to 30 or more. Adding them directly is meaningless.
 
-### Sparse Retrieval with BM25
+**Reciprocal Rank Fusion** (Cormack, Clarke & Büttcher, 2009) ignores the raw scores and uses only each document's **rank** in each list:
+
+> RRF score of a document = the sum over all lists of 1 / (k + rank)
+
+The constant `k` (60 in the original paper) dampens the effect of top positions, so a document that ranks well in *both* lists beats one that is first in only one. RRF has no weights to train, works with any number of retrievers, and is the default fusion method in several vector databases.
+
+*Alternative:* **weighted score fusion** normalizes both scores (for example, min–max to 0–1) and blends them, such as `0.7 × dense + 0.3 × sparse`. It can be tuned more finely but needs a labelled test set to choose the weight.
+
+### 4. Re-ranking: the careful second look
+
+Retrievers use a **bi-encoder**: query and documents are embedded *separately*, which is what makes searching millions of documents fast. A **cross-encoder** instead reads the query and one document *together* and outputs a single relevance score. Because it sees both texts at once, it can notice details such as negation or which entity a question is really about — so it is much more accurate. It is also far slower, since it must run once per (query, document) pair.
+
+That leads to the standard **two-stage pipeline** (shown in the animated diagram at the top of this page):
+
+1. **Retrieve for recall** — dense + BM25, fused with RRF, keep the top ~20–50 candidates. Fast and wide.
+2. **Re-rank for precision** — run the cross-encoder on just those candidates and pass the best 3–5 to the LLM.
+
+## Hands-On: Building the Pieces
+
+### BM25 with `rank_bm25`
 
 ```python
+# pip install rank_bm25
+import re
 from rank_bm25 import BM25Okapi
 
-tokenized_corpus = [doc.split() for doc in documents]
-bm25 = BM25Okapi(tokenized_corpus)
+def tokenize(text: str) -> list[str]:
+    return re.findall(r"\w+", text.lower())   # simple but better than str.split()
 
-def bm25_search(query: str, top_k: int = 10) -> list[int]:
-    tokenized_query = query.split()
-    scores = bm25.get_scores(tokenized_query)
-    return np.argsort(scores)[-top_k:][::-1]
+bm25 = BM25Okapi([tokenize(doc) for doc in docs])
+
+def bm25_search(query: str, k: int = 20) -> list[int]:
+    scores = bm25.get_scores(tokenize(query))
+    return sorted(range(len(docs)), key=lambda i: scores[i], reverse=True)[:k]
 ```
 
-### Reciprocal Rank Fusion (RRF)
-
-RRF combines rankings from multiple retrievers:
+### Dense retrieval with Sentence-Transformers
 
 ```python
-def reciprocal_rank_fusion(
-    dense_results: list[str],
-    sparse_results: list[str],
-    k: int = 60
-) -> list[tuple[str, float]]:
-    scores: dict[str, float] = {}
+# pip install sentence-transformers
+from sentence_transformers import SentenceTransformer
 
-    for rank, doc_id in enumerate(dense_results):
-        scores[doc_id] = scores.get(doc_id, 0) + 1 / (k + rank + 1)
+embedder = SentenceTransformer("all-MiniLM-L6-v2")
+doc_vectors = embedder.encode(docs, normalize_embeddings=True)
 
-    for rank, doc_id in enumerate(sparse_results):
-        scores[doc_id] = scores.get(doc_id, 0) + 1 / (k + rank + 1)
-
-    return sorted(scores.items(), key=lambda x: x[1], reverse=True)
+def dense_search(query: str, k: int = 20) -> list[int]:
+    q = embedder.encode(query, normalize_embeddings=True)
+    scores = doc_vectors @ q                      # dot product == cosine (normalized)
+    return scores.argsort()[::-1][:k].tolist()
 ```
 
-## Cross-Encoder Re-ranking
+For large collections you would replace the matrix product with a vector database query — the rest of the pipeline stays the same.
 
-After initial retrieval, re-rank with a cross-encoder for precision:
+### Reciprocal Rank Fusion
+
+```python
+def rrf(*ranked_lists: list[int], k: int = 60) -> list[int]:
+    scores: dict[int, float] = {}
+    for ranking in ranked_lists:
+        for rank, doc_id in enumerate(ranking, start=1):
+            scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (k + rank)
+    return sorted(scores, key=scores.get, reverse=True)
+```
+
+### Cross-encoder re-ranking
 
 ```python
 from sentence_transformers import CrossEncoder
 
-cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
 
-def rerank(query: str, candidates: list[str], top_k: int = 5) -> list[tuple[str, float]]:
-    pairs = [[query, doc] for doc in candidates]
-    scores = cross_encoder.predict(pairs)
-    results = list(zip(candidates, scores))
-    return sorted(results, key=lambda x: x[1], reverse=True)[:top_k]
+def rerank(query: str, doc_ids: list[int], top_n: int = 5) -> list[tuple[int, float]]:
+    scores = reranker.predict([(query, docs[i]) for i in doc_ids])
+    ranked = sorted(zip(doc_ids, scores), key=lambda x: x[1], reverse=True)
+    return ranked[:top_n]
 ```
 
-### Two-Stage Pipeline
+### Putting it together
 
 ```python
-def hybrid_rag_pipeline(query: str) -> list[str]:
-    # Stage 1: Hybrid retrieval (fast, recall-oriented)
-    dense_results = dense_search(query, top_k=50)
-    sparse_results = bm25_search(query, top_k=50)
-    fused = reciprocal_rank_fusion(dense_results, sparse_results)
-    candidates = [doc_id for doc_id, _ in fused[:20]]
-
-    # Stage 2: Cross-encoder re-ranking (slow, precision-oriented)
-    reranked = rerank(query, candidates, top_k=5)
-
-    return [doc for doc, _ in reranked]
+def hybrid_search(query: str, candidates: int = 20, top_n: int = 5):
+    fused = rrf(dense_search(query, candidates), bm25_search(query, candidates))
+    return rerank(query, fused[:candidates], top_n)
 ```
 
-## Performance Metrics
+## Hybrid Search in Real Databases
 
-| Method | Recall@10 | Precision@5 | Latency |
-|--------|-----------|-------------|---------|
-| Dense only | 0.82 | 0.65 | 50ms |
-| BM25 only | 0.71 | 0.58 | 5ms |
-| Hybrid (RRF) | 0.91 | 0.72 | 55ms |
-| Hybrid + Rerank | 0.93 | 0.88 | 250ms |
+You rarely need to hand-build this in production — most search stacks support it natively:
+
+| Stack | How hybrid works |
+|---|---|
+| **Weaviate** | Built-in `hybrid` query combining BM25 and vectors, with an `alpha` weight |
+| **Qdrant** | Stores dense and sparse vectors side by side; the Query API can fuse them with RRF |
+| **Elasticsearch / OpenSearch** | BM25 is native; combine it with k-NN vector queries |
+| **PostgreSQL** | Built-in full-text search (`tsvector`) plus pgvector, fused in SQL |
+
+Hosted re-rankers (for example, from Cohere or Jina) are an alternative to running your own cross-encoder. Compare options in the [AI Tools Directory](/directory).
+
+## Mini Project: Hybrid Search with Re-ranking
+
+This search engine runs entirely on your laptop — no API keys. It shows *why* hybrid wins by printing what each retriever finds on its own.
+
+```python
+# pip install rank_bm25 sentence-transformers
+import re
+from rank_bm25 import BM25Okapi
+from sentence_transformers import SentenceTransformer, CrossEncoder
+
+docs = [
+    "Error E1042: payment gateway timeout. Retry the request after 30 seconds.",
+    "Resolving payment errors: check card details, billing address and 3-D Secure.",
+    "How to reset your password from the login page.",
+    "Error E2001: invalid API key. Generate a new key in the dashboard.",
+    "Troubleshooting slow page loads: clear the cache and check your network.",
+    "Shipping times: orders usually arrive within 3 to 5 business days.",
+    "Refund policy: request a refund within 30 days of purchase.",
+    "Why checkout fails: expired cards, blocked transactions and gateway outages.",
+]
+
+def tokenize(text): return re.findall(r"\w+", text.lower())
+
+bm25 = BM25Okapi([tokenize(d) for d in docs])
+embedder = SentenceTransformer("all-MiniLM-L6-v2")
+doc_vecs = embedder.encode(docs, normalize_embeddings=True)
+reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+
+def bm25_search(q, k=5):
+    s = bm25.get_scores(tokenize(q))
+    return sorted(range(len(docs)), key=lambda i: s[i], reverse=True)[:k]
+
+def dense_search(q, k=5):
+    s = doc_vecs @ embedder.encode(q, normalize_embeddings=True)
+    return s.argsort()[::-1][:k].tolist()
+
+def rrf(*lists, k=60):
+    scores = {}
+    for ranking in lists:
+        for rank, i in enumerate(ranking, start=1):
+            scores[i] = scores.get(i, 0) + 1 / (k + rank)
+    return sorted(scores, key=scores.get, reverse=True)
+
+def show(title, ids):
+    print(f"\n{title}")
+    for i in ids[:3]:
+        print("  -", docs[i])
+
+while True:
+    q = input("\nSearch (or 'q' to quit): ").strip()
+    if q.lower() == "q":
+        break
+    sparse, dense = bm25_search(q), dense_search(q)
+    fused = rrf(dense, sparse)
+    reranked = sorted(fused, key=lambda i: reranker.predict([(q, docs[i])])[0], reverse=True)
+    show("BM25 only:", sparse)
+    show("Dense only:", dense)
+    show("Hybrid (RRF):", fused)
+    show("Hybrid + re-rank:", reranked)
+```
+
+Try these and compare the four lists:
+
+- `How do I fix E1042?` — BM25 nails the exact code; dense alone is unsure.
+- `why does checkout keep failing` — dense finds the meaning; BM25 alone may not.
+- `my card got rejected at checkout` — hybrid + re-rank should put the most useful page first.
+
+**Stretch goals**
+
+1. Score all candidates in **one** `reranker.predict` call (pass a list of pairs) — it's much faster than one call per document.
+2. Replace RRF with weighted fusion and find the best weight on 10 test questions.
+3. Load your own documents (split into chunks) and store vectors in Qdrant.
+4. Send the top 3 re-ranked chunks to an LLM with the question — a complete RAG pipeline.
+
+## Common Mistakes
+
+1. **Adding raw scores from different retrievers.** Cosine and BM25 are on different scales. Use RRF, or normalize before blending.
+2. **Naive tokenization for BM25.** `text.split()` keeps punctuation (`"E1042:"` won't match `"E1042"`) and is case-sensitive. Lowercase and split on word characters at minimum.
+3. **Re-ranking too many or too few candidates.** Hundreds of candidates make the cross-encoder slow; three leaves it nothing to choose from. Twenty to fifty is a common starting range — measure.
+4. **Calling the cross-encoder once per document.** Batch all pairs in a single `predict` call.
+5. **Using an English re-ranker on other languages.** `ms-marco` models are trained on English; pick a multilingual re-ranker if your users aren't.
+6. **Skipping evaluation.** Hybrid usually helps, but "usually" isn't a test. Measure with your own questions — see [RAG Evaluation](/docs/02-rag/rag-eval).
+
+## Production Tips
+
+- **Budget your latency.** BM25 and ANN search take milliseconds; the cross-encoder is usually the slowest step. A small model on a GPU, or a hosted re-rank API, keeps it in check.
+- **Cache frequent queries.** Popular questions repeat; cache final results for a few minutes.
+- **Use metadata filters in both retrievers** so tenants, languages or document versions never mix.
+- **Keep the two indexes in sync.** When a document changes, update its BM25 entry *and* its vectors in the same job.
+- **Log what was retrieved.** Store the query, candidate IDs and final ranking for every request — it's the only way to debug a bad answer later.
+- **Measure before and after.** Compare dense-only, hybrid and hybrid + re-rank on the same test set (hit rate, MRR) before turning on the expensive step for everyone.
 
 ## Key Takeaways
 
-- Hybrid search with RRF reliably outperforms single-method retrieval
-- Two-stage retrieval (fast recall + slow precision) optimizes cost and quality
-- Cross-encoder re-ranking is the most accurate but most expensive step
-- Tune your `top_k` values based on latency requirements
+- Dense retrieval understands meaning; BM25 nails exact words, codes and names — real queries need both.
+- Reciprocal Rank Fusion merges ranked lists using ranks only, so scores on different scales don't matter (k = 60 is the classic default).
+- Cross-encoders read query and document together: far more accurate than bi-encoders, but too slow to run on everything.
+- Retrieve wide for recall, then re-rank a short list for precision — the two-stage pipeline.
+- Most vector databases and search engines support hybrid natively; always confirm the gain on your own test questions.
 
-## Next Steps
+## Further Reading
 
-Learn how ReAct agents use retrieved context to drive tool-calling decisions in the Agents module.
+- Robertson & Zaragoza, *The Probabilistic Relevance Framework: BM25 and Beyond* (Foundations and Trends in Information Retrieval, 2009)
+- Cormack, Clarke & Büttcher, *Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods* (SIGIR 2009)
+- [Sentence-Transformers: Cross-Encoders documentation](https://www.sbert.net/examples/cross_encoder/applications/README.html)
+- [rank_bm25 on GitHub](https://github.com/dorianbrown/rank_bm25)
+- [Weaviate hybrid search documentation](https://weaviate.io/developers/weaviate/search/hybrid)
+- [Qdrant hybrid queries documentation](https://qdrant.tech/documentation/concepts/hybrid-queries/)
