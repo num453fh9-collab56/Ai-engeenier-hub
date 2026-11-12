@@ -25,7 +25,7 @@ interface PhaseCard {
 const phases: PhaseCard[] = [
   {
     badge: "Python & AI Core",
-    badgeColor: "bg-blue-500/10 text-blue-500",
+    badgeColor: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
     icon: Brain,
     gradient: "from-blue-600/20 to-indigo-600/10",
     title: "Phase I: Math & ML Foundations",
@@ -36,7 +36,7 @@ const phases: PhaseCard[] = [
   },
   {
     badge: "Deep Learning",
-    badgeColor: "bg-purple-500/10 text-purple-500",
+    badgeColor: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
     icon: Network,
     gradient: "from-purple-600/20 to-pink-600/10",
     title: "Phase II–IV: Deep Learning & Vision",
@@ -47,7 +47,7 @@ const phases: PhaseCard[] = [
   },
   {
     badge: "RAG Systems",
-    badgeColor: "bg-emerald-500/10 text-emerald-500",
+    badgeColor: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
     icon: BookOpen,
     gradient: "from-emerald-600/20 to-teal-600/10",
     title: "Phase XI: Retrieval-Augmented Generation",
@@ -58,7 +58,7 @@ const phases: PhaseCard[] = [
   },
   {
     badge: "Autonomous Agents",
-    badgeColor: "bg-amber-500/10 text-amber-500",
+    badgeColor: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
     icon: Cpu,
     gradient: "from-amber-600/20 to-orange-600/10",
     title: "Phase XV: Autonomous Systems",

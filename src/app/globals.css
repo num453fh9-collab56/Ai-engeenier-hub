@@ -168,7 +168,7 @@ pre code > span::before {
   width: 2rem;
   padding-right: 0.75rem;
   text-align: right;
-  color: hsl(var(--muted-foreground) / 0.4);
+  color: color-mix(in oklab, var(--muted-foreground) 50%, transparent);
 }
 
 @keyframes ticker {
@@ -328,4 +328,16 @@ pre code > span::before {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .shape-float, .cube-spin { animation: none; }
+}
+
+/* Readability fixes (unlayered so they beat the typography plugin) */
+.prose pre,
+.prose pre code {
+  color: var(--foreground);
+}
+.prose pre {
+  background: var(--muted);
+}
+.prose :is(h1, h2, h3, h4) {
+  scroll-margin-top: 6rem;
 }

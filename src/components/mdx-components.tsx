@@ -17,7 +17,7 @@ function PreWithCopy({ children, ...props }: React.HTMLAttributes<HTMLPreElement
 
   return (
     <div className="group relative my-6">
-      <pre {...props} className="overflow-x-auto rounded-lg border border-border bg-card p-4 text-sm">
+      <pre {...props} className="overflow-x-auto rounded-lg border border-border bg-muted p-4 text-sm text-foreground">
         <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
           <CopyButton text={String(raw)} />
         </div>

@@ -82,7 +82,7 @@ export function HeroDemo({ embedded = false }: { embedded?: boolean }) {
           <span className="ml-2 text-xs text-muted-foreground font-mono">
             ask-an-ai-engineer
           </span>
-          <span className="ml-auto inline-flex items-center gap-1.5 text-[10px] text-emerald-500">
+          <span className="ml-auto inline-flex items-center gap-1.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
             <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
             live
           </span>

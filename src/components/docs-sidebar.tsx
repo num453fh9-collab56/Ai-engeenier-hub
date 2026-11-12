@@ -70,18 +70,18 @@ export function DocsSidebar({
                         key={href}
                         href={href}
                         onClick={() => setMobileOpen(false)}
-                        className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                        className={`flex items-start gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
                           isActive
                             ? "bg-accent font-medium text-accent-foreground"
                             : "text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground"
                         }`}
                       >
                         {progress.completed[`${doc.category}/${doc.slug}`] ? (
-                          <CheckCircle2 className="size-3 shrink-0 text-emerald-500" />
+                          <CheckCircle2 className="size-3 mt-1 shrink-0 text-emerald-500" />
                         ) : (
-                          <FileText className="size-3 shrink-0" />
+                          <FileText className="size-3 mt-1 shrink-0" />
                         )}
-                        <span className="truncate">{doc.title}</span>
+                        <span className="line-clamp-2 leading-snug" title={doc.title}>{doc.title}</span>
                       </Link>
                     );
                   })}
@@ -119,7 +119,7 @@ export function DocsSidebar({
       <div className="lg:hidden h-11 shrink-0" aria-hidden />
 
       {/* Desktop sidebar */}
-      <aside className="hidden lg:block w-64 shrink-0 border-r border-border bg-muted/30 overflow-y-auto h-[calc(100vh-3.5rem)] sticky top-14">
+      <aside className="hidden lg:block w-72 shrink-0 border-r border-border bg-muted/30 overflow-y-auto h-[calc(100vh-3.5rem)] sticky top-14">
         {nav}
       </aside>
     </>

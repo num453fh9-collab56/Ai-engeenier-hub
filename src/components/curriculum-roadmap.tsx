@@ -327,10 +327,10 @@ const curriculum: Phase[] = [
 ];
 
 const langColors: Record<string, string> = {
-  Python: "bg-blue-500/10 text-blue-500",
-  TypeScript: "bg-amber-500/10 text-amber-500",
-  Rust: "bg-purple-500/10 text-purple-500",
-  Julia: "bg-emerald-500/10 text-emerald-500",
+  Python: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+  TypeScript: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  Rust: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
+  Julia: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
 };
 
 export function CurriculumRoadmap() {
