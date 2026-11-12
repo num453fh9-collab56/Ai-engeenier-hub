@@ -1,67 +1,34 @@
-import { getDocsByCategory } from "@/lib/mdx";
-import { RoadmapCard } from "./roadmap-card";
+import type { Metadata } from "next";
+import { Route } from "lucide-react";
+import { getLearningPath } from "@/lib/learning-path";
+import { CurriculumRoadmap } from "@/components/curriculum-roadmap";
+
+export const metadata: Metadata = {
+  title: "The AI Engineer Path — Roadmap",
+  description:
+    "A focused, step-by-step path to becoming an AI engineer: LLM foundations, RAG, agents, fine-tuning, production and safety — with every live and planned lesson clearly marked.",
+  alternates: { canonical: "/roadmap" },
+};
 
 export default function RoadmapPage() {
-  const docsByCategory = getDocsByCategory();
-
-  const categoryInfo: Record<
-    string,
-    { label: string; description: string; color: string }
-  > = {
-    "01-foundations": {
-      label: "Foundations",
-      description: "Core concepts: async Python, structured outputs, and LLM fundamentals",
-      color: "border-l-blue-500",
-    },
-    "02-rag": {
-      label: "RAG",
-      description: "Retrieval-Augmented Generation: hybrid search, re-ranking, and pipelines",
-      color: "border-l-emerald-500",
-    },
-    "03-agents": {
-      label: "Agents",
-      description: "Agent architectures: ReAct pattern, tool calling, and multi-agent systems",
-      color: "border-l-violet-500",
-    },
-  };
+  const phases = getLearningPath();
+  const live = phases.reduce((n, p) => n + p.liveCount, 0);
+  const planned = phases.reduce((n, p) => n + p.items.length - p.liveCount, 0);
 
   return (
-    <div className="flex-1 max-w-3xl mx-auto w-full px-4 py-12">
-      <h1 className="text-3xl font-bold tracking-tight mb-2">
-        Learning Roadmap
-      </h1>
-      <p className="text-muted-foreground mb-10">
-        A structured path from fundamentals to advanced AI engineering concepts.
-      </p>
-
-      <div className="space-y-8">
-        {Object.entries(docsByCategory).map(([category, docs]) => {
-          const info = categoryInfo[category] || {
-            label: category,
-            description: "",
-            color: "border-l-gray-500",
-          };
-          return (
-            <section key={category}>
-              <div
-                className={`border-l-4 ${info.color} pl-4 mb-4`}
-              >
-                <h2 className="text-xl font-semibold">{info.label}</h2>
-                {info.description && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {info.description}
-                  </p>
-                )}
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {docs.map((doc) => (
-                  <RoadmapCard key={doc.slug} doc={doc} />
-                ))}
-              </div>
-            </section>
-          );
-        })}
+    <div className="flex-1 w-full px-4 py-12">
+      <div className="mx-auto max-w-4xl mb-8">
+        <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary mb-4">
+          <Route className="size-3.5" /> Roadmap
+        </div>
+        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-3">The AI Engineer Path</h1>
+        <p className="text-muted-foreground max-w-2xl">
+          {`Follow the phases in order — each builds on the last. ${phases.length} phases, ${live} lessons live and ${planned} planned. `}
+          Live lessons open with a click; planned ones are marked &ldquo;Coming soon&rdquo; so you always know exactly
+          what&apos;s available.
+        </p>
       </div>
+      <CurriculumRoadmap phases={phases} allOpen showHeader={false} />
     </div>
   );
 }

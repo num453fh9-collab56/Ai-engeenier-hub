@@ -3,6 +3,7 @@ import { BookOpen, FileDown } from "lucide-react";
 import { Newsletter } from "@/components/newsletter";
 import { CourseGrid } from "@/components/course-grid";
 import { getLessonCards } from "@/lib/lesson-cards";
+import { getLearningPath } from "@/lib/learning-path";
 import { CurriculumRoadmap } from "@/components/curriculum-roadmap";
 import { LandingHero } from "@/components/landing-hero";
 import { CardCarousel } from "@/components/card-carousel";
@@ -76,7 +77,7 @@ export default function Home() {
 
       <CourseGrid lessons={getLessonCards()} />
 
-      <CurriculumRoadmap />
+      <CurriculumRoadmap phases={getLearningPath()} />
 
       {/* Compiled Track Books */}
       <section className="px-4 py-20">
