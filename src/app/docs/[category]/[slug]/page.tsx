@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { SITE_URL } from "@/lib/site";
 import type { Metadata } from "next";
 import { MDXRemote } from "next-mdx-remote/rsc";
 import remarkGfm from "remark-gfm";
@@ -141,8 +142,8 @@ export default async function DocPage({ params }: PageProps) {
       author: { "@type": "Organization", name: "AI Engineering Hub" },
       datePublished: new Date().toISOString(),
       dateModified: new Date().toISOString(),
-      image: `https://aiengineeringhub.com/docs/${category}/${slug}/opengraph-image`,
-      url: `https://aiengineeringhub.com/docs/${category}/${slug}`,
+      image: `${SITE_URL}/docs/${category}/${slug}/opengraph-image`,
+      url: `${SITE_URL}/docs/${category}/${slug}`,
       difficulty: doc.difficulty,
       timeRequired: `PT${rt.replace(" min read", "")}M`,
       keywords: doc.tags.join(", "),

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SITE_URL } from "@/lib/site";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Header } from "@/components/header";
@@ -47,7 +48,7 @@ export const metadata: Metadata = {
   authors: [{ name: "AI Engineering Hub" }],
   creator: "AI Engineering Hub",
   publisher: "AI Engineering Hub",
-  metadataBase: new URL("https://aiengineeringhub.com"),
+  metadataBase: new URL(SITE_URL),
   openGraph: {
     type: "website",
     locale: "en_US",

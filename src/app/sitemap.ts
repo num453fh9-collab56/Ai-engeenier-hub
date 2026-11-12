@@ -1,8 +1,9 @@
 import { MetadataRoute } from "next";
+import { SITE_URL } from "@/lib/site";
 import { getAllDocs } from "@/lib/mdx";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = "https://aiengineeringhub.com";
+  const baseUrl = SITE_URL;
 
   const docs = getAllDocs();
 

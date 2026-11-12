@@ -1,4 +1,5 @@
 import { LogoMark } from "@/components/logo";
+import { SITE_HOST } from "@/lib/site";
 import { ImageResponse } from "next/og";
 import { getDocBySlug } from "@/lib/mdx";
 
@@ -114,7 +115,7 @@ export default async function Image({ params }: Props) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="#2563eb">
               <circle cx="12" cy="12" r="10" />
             </svg>
-            aiengineeringhub.com
+            {SITE_HOST}
           </div>
         </div>
       </div>

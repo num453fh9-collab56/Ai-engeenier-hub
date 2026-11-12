@@ -1,5 +1,7 @@
 "use client";
 
+import { SITE_HOST } from "@/lib/site";
+
 import { useState } from "react";
 import Link from "next/link";
 import { Award, Lock, Printer } from "lucide-react";
@@ -78,7 +80,7 @@ export function Certificate({ track }: { track: TrackInfo }) {
         <p className="mt-[1%] text-[clamp(9px,1.5vw,14px)] text-zinc-500">at AI Engineering Hub</p>
         <div className="mt-[5%] flex w-[70%] justify-between text-[clamp(8px,1.3vw,12px)] text-zinc-500">
           <span>{date}</span>
-          <span>aiengineeringhub.com</span>
+          <span>{SITE_HOST}</span>
         </div>
       </div>
       <p className="print:hidden mt-3 text-xs text-muted-foreground text-center">
