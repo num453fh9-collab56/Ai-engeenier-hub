@@ -212,3 +212,30 @@ pre code > span::before {
   0%, 100% { opacity: 0.15; }
   50% { opacity: 0.4; }
 }
+
+/* Phase 2 hero */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes aurora {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(40px, 30px) scale(1.15); }
+}
+@keyframes gradient-x {
+  0%, 100% { background-position: 0% center; }
+  50% { background-position: 100% center; }
+}
+.animate-fade-up { animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-aurora { animation: aurora 12s ease-in-out infinite; }
+.animate-gradient-x { animation: gradient-x 6s ease infinite; }
+.bg-hero-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at 50% 30%, black 20%, transparent 70%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up, .animate-aurora, .animate-gradient-x { animation: none; }
+}

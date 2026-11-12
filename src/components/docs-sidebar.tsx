@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, FileText, Book } from "lucide-react";
+import { ChevronDown, FileText, Book, Menu, X } from "lucide-react";
 import type { DocNode } from "@/lib/mdx";
 
 const categoryLabel: Record<string, string> = {
@@ -26,12 +26,23 @@ export function DocsSidebar({
     return state;
   });
 
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
   const toggle = (category: string) => {
     setExpanded((prev) => ({ ...prev, [category]: !prev[category] }));
   };
 
-  return (
-    <aside className="w-64 shrink-0 border-r border-border bg-muted/30 overflow-y-auto h-[calc(100vh-3.5rem)] sticky top-14">
+  const currentTitle =
+    Object.values(docsByCategory)
+      .flat()
+      .find((d) => pathname === `/docs/${d.category}/${d.slug}`)?.title ??
+    "Lessons";
+
+  const nav = (
       <div className="p-4">
         <h2 className="mb-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Documentation
@@ -80,6 +91,37 @@ export function DocsSidebar({
           ))}
         </nav>
       </div>
-    </aside>
+  );
+
+  return (
+    <>
+      {/* Mobile / tablet: compact bar + drawer */}
+      <div className="lg:hidden fixed inset-x-0 top-14 z-30 border-b border-border bg-background/90 backdrop-blur">
+        <button
+          onClick={() => setMobileOpen((o) => !o)}
+          aria-expanded={mobileOpen}
+          className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium"
+        >
+          {mobileOpen ? <X className="size-4" /> : <Menu className="size-4" />}
+          <span className="truncate">{currentTitle}</span>
+          <ChevronDown
+            className={`ml-auto size-4 text-muted-foreground transition-transform ${
+              mobileOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+        {mobileOpen && (
+          <div className="max-h-[70vh] overflow-y-auto border-t border-border bg-background shadow-lg">
+            {nav}
+          </div>
+        )}
+      </div>
+      <div className="lg:hidden h-11 shrink-0" aria-hidden />
+
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:block w-64 shrink-0 border-r border-border bg-muted/30 overflow-y-auto h-[calc(100vh-3.5rem)] sticky top-14">
+        {nav}
+      </aside>
+    </>
   );
 }

@@ -112,7 +112,7 @@ export default async function DocPage({ params }: PageProps) {
 
     return (
       <div className="flex">
-        <article className="flex-1 min-w-0 max-w-3xl mx-auto px-6 py-10">
+        <article className="flex-1 min-w-0 max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
           <header className="mb-8">
             <div className="flex items-center gap-2 mb-3">
@@ -124,7 +124,7 @@ export default async function DocPage({ params }: PageProps) {
                 Deep Research
               </span>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight mb-2">{doc.title}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-2">{doc.title}</h1>
             <p className="text-muted-foreground">{doc.description}</p>
             <div className="flex items-center gap-2 mt-3 flex-wrap">
               {doc.difficulty && (
@@ -148,7 +148,7 @@ export default async function DocPage({ params }: PageProps) {
               ))}
             </div>
           </header>
-          <div className="prose prose-zinc dark:prose-invert prose-lg max-w-none">
+          <div className="prose prose-zinc dark:prose-invert sm:prose-lg max-w-none prose-pre:overflow-x-auto prose-table:block prose-table:overflow-x-auto">
             <MDXRemote
               source={doc.content}
               components={mdxComponents}

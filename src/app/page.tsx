@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Newsletter } from "@/components/newsletter";
 import { CourseGrid } from "@/components/course-grid";
 import { CurriculumRoadmap } from "@/components/curriculum-roadmap";
-import { AiCoreGraphic } from "@/components/ai-core-graphic";
+import { HeroDemo } from "@/components/hero-demo";
 import { getAllDocs } from "@/lib/mdx";
 import { glossary } from "@/lib/glossary";
 
@@ -73,26 +73,29 @@ export default function Home() {
       {/* Hero Section */}
       <section className="relative overflow-hidden px-4 py-16 sm:py-20">
         <div className="absolute inset-0 bg-radial-gradient-hero pointer-events-none" />
-        <div className="absolute top-0 left-1/3 w-96 h-96 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
+        <div className="absolute inset-0 bg-hero-grid pointer-events-none" />
+        <div className="absolute -top-24 left-1/4 w-[28rem] h-[28rem] rounded-full bg-primary/15 blur-3xl pointer-events-none animate-aurora" />
+        <div className="absolute top-20 right-0 w-80 h-80 rounded-full bg-cyan-400/10 blur-3xl pointer-events-none animate-aurora [animation-delay:-6s]" />
 
         <div className="relative mx-auto max-w-6xl">
           <div className="grid items-center gap-12 lg:grid-cols-2">
-            <div className="text-center lg:text-left">
+            <div className="text-center lg:text-left animate-fade-up">
               <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm text-primary mb-6">
                 <Sparkles className="size-3.5" />
                 <span>{lessonCount} lessons live — new lessons every week</span>
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-tight mb-4">
-                AI Engineering{" "}
-                <span className="bg-gradient-to-r from-primary via-primary to-cyan-400 bg-clip-text text-transparent">
-                  From Scratch
+                Become the AI Engineer{" "}
+                <span className="bg-gradient-to-r from-primary via-cyan-400 to-primary bg-[length:200%_auto] bg-clip-text text-transparent animate-gradient-x">
+                  companies hire
                 </span>
               </h1>
 
               <p className="max-w-2xl mx-auto lg:mx-0 text-lg text-muted-foreground mb-8">
-                Master AI from raw math to autonomous agent swarms. With
-                hands-on Python and TypeScript code.
+                From raw math to production RAG and autonomous agents — free,
+                hands-on lessons with real Python &amp; TypeScript code. Try the
+                live AI demo — ask it anything.
               </p>
 
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mb-12">
@@ -125,7 +128,7 @@ export default function Home() {
                 ].map((stat) => (
                   <div
                     key={stat.label}
-                    className="rounded-lg border border-border/60 bg-card/50 px-4 py-3"
+                    className="rounded-lg border border-border/60 bg-card/50 backdrop-blur px-4 py-3 transition-colors hover:border-primary/40"
                   >
                     <p className="text-xl font-bold">{stat.value}</p>
                     <p className="text-[11px] text-muted-foreground">{stat.label}</p>
@@ -134,9 +137,9 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Hero Right Column — Animated AI Core */}
-            <div className="hidden lg:flex items-center justify-center">
-              <AiCoreGraphic />
+            {/* Hero Right Column — Live AI demo */}
+            <div className="flex items-center justify-center">
+              <HeroDemo />
             </div>
           </div>
         </div>

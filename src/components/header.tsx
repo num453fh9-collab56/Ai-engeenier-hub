@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Radio, Workflow, BarChart3, BookText, Library } from "lucide-react";
+import { Radio, Workflow, BarChart3, BookText, Library, Route } from "lucide-react";
 import { SearchCommand } from "@/components/search-command";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Button } from "@/components/ui/button";
@@ -22,32 +22,35 @@ export function Header() {
           <SearchCommand />
         </div>
 
-        <nav className="flex items-center gap-0.5">
+        <nav className="flex items-center gap-0.5 shrink-0">
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/roadmap">Roadmap</Link>
+            <Link href="/roadmap" aria-label="Roadmap">
+              <Route className="size-3.5" />
+              <span className="hidden md:inline">Roadmap</span>
+            </Link>
           </Button>
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/catalog">
+            <Link href="/catalog" aria-label="Catalog">
               <BookText className="size-3.5" />
-              Catalog
+              <span className="hidden md:inline">Catalog</span>
             </Link>
           </Button>
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/benchmarks">
+            <Link href="/benchmarks" aria-label="Benchmarks">
               <BarChart3 className="size-3.5" />
-              Benchmarks
+              <span className="hidden md:inline">Benchmarks</span>
             </Link>
           </Button>
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/tools/decision-matrix">
+            <Link href="/tools/decision-matrix" aria-label="Tools">
               <Workflow className="size-3.5" />
-              Tools
+              <span className="hidden md:inline">Tools</span>
             </Link>
           </Button>
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/glossary">
+            <Link href="/glossary" aria-label="Glossary">
               <Library className="size-3.5" />
-              Glossary
+              <span className="hidden md:inline">Glossary</span>
             </Link>
           </Button>
 
