@@ -18,7 +18,7 @@ const fallback: Record<string, string> = {
     "The model is given tool schemas. It decides to call one, your code executes it, and the result is fed back. This loop (reason → act → observe) repeats until the task is done — the ReAct pattern.",
 };
 
-export function HeroDemo() {
+export function HeroDemo({ embedded = false }: { embedded?: boolean }) {
   const [input, setInput] = useState("");
   const [question, setQuestion] = useState<string | null>(null);
   const [answer, setAnswer] = useState("");
@@ -70,9 +70,11 @@ export function HeroDemo() {
   }
 
   return (
-    <div className="relative w-full max-w-md mx-auto animate-fade-up [animation-delay:200ms]">
-      <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-primary/60 via-cyan-400/30 to-transparent blur-sm opacity-70" />
-      <div className="relative rounded-2xl border border-border/60 bg-card/90 backdrop-blur-xl shadow-2xl overflow-hidden">
+    <div className={embedded ? "relative w-full" : "relative w-full max-w-md mx-auto animate-fade-up [animation-delay:200ms]"}>
+      {!embedded && (
+        <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-primary/60 via-cyan-400/30 to-transparent blur-sm opacity-70" />
+      )}
+      <div className={embedded ? "relative bg-card overflow-hidden" : "relative rounded-2xl border border-border/60 bg-card/90 backdrop-blur-xl shadow-2xl overflow-hidden"}>
         <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5">
           <span className="size-2.5 rounded-full bg-red-400/80" />
           <span className="size-2.5 rounded-full bg-amber-400/80" />
@@ -86,7 +88,7 @@ export function HeroDemo() {
           </span>
         </div>
 
-        <div className="h-64 overflow-y-auto p-4 text-sm space-y-3">
+        <div className={`${embedded ? "h-56 sm:h-60" : "h-64"} overflow-y-auto p-4 text-sm space-y-3`}>
           {!question && (
             <div className="text-muted-foreground">
               <p className="mb-3">

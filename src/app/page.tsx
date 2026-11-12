@@ -1,29 +1,14 @@
 import Link from "next/link";
-import {
-  ArrowRight,
-  Route,
-  Sparkles,
-  BookOpen,
-  FileDown,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { BookOpen, FileDown } from "lucide-react";
 import { Newsletter } from "@/components/newsletter";
 import { CourseGrid } from "@/components/course-grid";
 import { CurriculumRoadmap } from "@/components/curriculum-roadmap";
-import { HeroDemo } from "@/components/hero-demo";
+import { LandingHero } from "@/components/landing-hero";
+import { CardCarousel } from "@/components/card-carousel";
+import { LessonCard, TrackCard, type LessonCardData } from "@/components/landing-cards";
+import { readingTime } from "@/lib/reading-time";
 import { getAllDocs } from "@/lib/mdx";
-import { glossary } from "@/lib/glossary";
-import { getTracks } from "@/lib/tracks";
-
-const technologies = [
-  { label: "OpenAI" },
-  { label: "Anthropic Claude" },
-  { label: "Meta LLaMA" },
-  { label: "DeepSeek" },
-  { label: "LangChain" },
-  { label: "Pinecone" },
-  { label: "Groq" },
-];
+import { getTracks, trackLabel } from "@/lib/tracks";
 
 const trackGradients = [
   "from-blue-600/20 to-indigo-600/10",
@@ -38,105 +23,52 @@ export default function Home() {
   const docs = getAllDocs();
   const lessonCount = docs.length;
   const tracks = getTracks();
+  const lessonCards: LessonCardData[] = [...docs]
+    .sort((a, b) => a.category.localeCompare(b.category) || a.order - b.order)
+    .map((d) => ({
+      href: `/docs/${d.category}/${d.slug}`,
+      title: d.title,
+      description: d.description,
+      category: d.category,
+      trackLabel: trackLabel(d.category),
+      difficulty: d.difficulty,
+      readTime: readingTime(d.content),
+    }));
   const trackCount = tracks.length;
 
   return (
     <div className="flex flex-col flex-1">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden px-4 py-16 sm:py-20">
-        <div className="absolute inset-0 bg-radial-gradient-hero pointer-events-none" />
-        <div className="absolute inset-0 bg-hero-grid pointer-events-none" />
-        <div className="absolute -top-24 left-1/4 w-[28rem] h-[28rem] rounded-full bg-primary/15 blur-3xl pointer-events-none animate-aurora" />
-        <div className="absolute top-20 right-0 w-80 h-80 rounded-full bg-cyan-400/10 blur-3xl pointer-events-none animate-aurora [animation-delay:-6s]" />
+      <LandingHero lessonCount={lessonCount} trackCount={trackCount} />
 
-        <div className="relative mx-auto max-w-6xl">
-          <div className="grid items-center gap-12 lg:grid-cols-2">
-            <div className="text-center lg:text-left animate-fade-up">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm text-primary mb-6">
-                <Sparkles className="size-3.5" />
-                <span>{lessonCount} lessons live — new lessons every week</span>
-              </div>
+      <CardCarousel
+        title="Popular lessons"
+        subtitle="Pick a lesson and start building in minutes."
+        count={lessonCards.length}
+      >
+        {lessonCards.map((l, i) => (
+          <LessonCard key={l.href} l={l} i={i} />
+        ))}
+      </CardCarousel>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-tight mb-4">
-                Become the AI Engineer{" "}
-                <span className="bg-gradient-to-r from-primary via-cyan-400 to-primary bg-[length:200%_auto] bg-clip-text text-transparent animate-gradient-x">
-                  companies hire
-                </span>
-              </h1>
-
-              <p className="max-w-2xl mx-auto lg:mx-0 text-lg text-muted-foreground mb-8">
-                From raw math to production RAG and autonomous agents — free,
-                hands-on lessons with real Python &amp; TypeScript code. Try the
-                live AI demo — ask it anything.
-              </p>
-
-              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mb-12">
-                <Button size="lg" asChild>
-                  <Link href="/docs/01-foundations/intro">
-                    Start Learning
-                    <ArrowRight className="size-4" />
-                  </Link>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="bg-background/60 backdrop-blur-sm border-primary/20 hover:bg-primary/5"
-                  asChild
-                >
-                  <Link href="/roadmap">
-                    <Route className="size-4" />
-                    View Full Curriculum
-                  </Link>
-                </Button>
-              </div>
-
-              {/* Stats Bar */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-2xl mx-auto lg:mx-0">
-                {[
-                  { value: String(lessonCount), label: "In-Depth Lessons" },
-                  { value: String(trackCount), label: "Learning Tracks" },
-                  { value: "20", label: "Roadmap Phases" },
-                  { value: String(glossary.length), label: "Glossary Terms" },
-                ].map((stat) => (
-                  <div
-                    key={stat.label}
-                    className="rounded-lg border border-border/60 bg-card/50 backdrop-blur px-4 py-3 transition-colors hover:border-primary/40"
-                  >
-                    <p className="text-xl font-bold">{stat.value}</p>
-                    <p className="text-[11px] text-muted-foreground">{stat.label}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Hero Right Column — Live AI demo */}
-            <div className="flex items-center justify-center">
-              <HeroDemo />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Tech Stack Logo Ticker */}
-      <section className="py-8 border-y border-border/40">
-        <p className="text-center text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4">
-          Powered by industry leaders
-        </p>
-        <div className="relative overflow-hidden">
-          <div className="flex gap-12 animate-ticker w-max items-center">
-            {[...technologies, ...technologies].map((tech, i) => (
-              <div
-                key={`${tech.label}-${i}`}
-                className="flex items-center justify-center rounded-lg border border-border/50 bg-card/50 px-4 py-2.5 shrink-0"
-              >
-                <span className="text-sm font-semibold text-muted-foreground whitespace-nowrap">
-                  {tech.label}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <CardCarousel
+        title="Explore by track"
+        subtitle="Follow a full path and earn a certificate."
+        count={tracks.length}
+      >
+        {tracks.map((t, i) => (
+          <TrackCard
+            key={t.category}
+            i={i}
+            t={{
+              category: t.category,
+              label: t.label,
+              count: t.lessons.length,
+              href: t.lessons[0]?.href ?? "/docs",
+              topics: t.lessons.map((x) => x.title),
+            }}
+          />
+        ))}
+      </CardCarousel>
 
       <CourseGrid />
 
