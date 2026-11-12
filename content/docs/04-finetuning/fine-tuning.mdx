@@ -1,0 +1,106 @@
+---
+title: "LLM Fine-Tuning with LoRA & QLoRA"
+description: "Efficiently fine-tune large language models using parameter-efficient techniques like LoRA and QLoRA."
+category: "04-finetuning"
+order: 1
+difficulty: "advanced"
+tags:
+  - fine-tuning
+  - lora
+  - qlora
+  - peft
+  - transformers
+  - huggingface
+slug: "fine-tuning"
+---
+
+## Introduction
+
+Fine-tuning adapts a pre-trained LLM to a specific task or domain. Full fine-tuning updates all parameters and is expensive. **Parameter-Efficient Fine-Tuning (PEFT)** methods like LoRA and QLoRA achieve comparable results at a fraction of the cost.
+
+## LoRA: Low-Rank Adaptation
+
+LoRA decomposes weight updates into low-rank matrices:
+
+`W' = W + BA`
+
+Where B in R^(d x r), A in R^(r x k), and r is much less than min(d, k).
+
+```python
+import torch
+import torch.nn as nn
+
+class LoRALayer(nn.Module):
+    def __init__(self, in_dim: int, out_dim: int, rank: int = 8, alpha: float = 16):
+        super().__init__()
+        self.A = nn.Parameter(torch.randn(in_dim, rank) * 0.01)
+        self.B = nn.Parameter(torch.zeros(rank, out_dim))
+        self.scale = alpha / rank
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return (x @ self.A @ self.B) * self.scale
+```
+
+## QLoRA: Quantized LoRA
+
+QLoRA combines 4-bit NormalFloat quantization with LoRA:
+
+```python
+from transformers import BitsAndBytesConfig, AutoModelForCausalLM
+
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_use_double_quant=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.bfloat16,
+)
+
+model = AutoModelForCausalLM.from_pretrained(
+    "meta-llama/Llama-2-7b-hf",
+    quantization_config=bnb_config,
+    device_map="auto",
+)
+```
+
+## Training Loop
+
+```python
+from transformers import TrainingArguments, Trainer
+from peft import LoraConfig, get_peft_model
+
+lora_config = LoraConfig(
+    r=16,
+    lora_alpha=32,
+    target_modules=["q_proj", "v_proj"],
+    lora_dropout=0.05,
+    bias="none",
+    task_type="CAUSAL_LM",
+)
+
+model = get_peft_model(model, lora_config)
+
+training_args = TrainingArguments(
+    output_dir="./lora-finetuned",
+    per_device_train_batch_size=4,
+    gradient_accumulation_steps=4,
+    learning_rate=2e-4,
+    num_train_epochs=3,
+    logging_steps=10,
+    save_strategy="epoch",
+)
+
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=dataset,
+)
+
+trainer.train()
+```
+
+## Key Takeaways
+
+- LoRA trains only 0.1-1% of parameters while matching full fine-tune quality
+- QLoRA enables fine-tuning 65B+ models on a single GPU
+- Always use gradient checkpointing for memory efficiency
+- Merge LoRA weights back into the base model for inference

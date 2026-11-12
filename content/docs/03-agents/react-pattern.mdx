@@ -1,0 +1,183 @@
+---
+title: "ReAct Agent Architecture & Tool Calling"
+description: "Implement the Reasoning + Acting (ReAct) pattern for LLM agents with structured tool calling and observability"
+category: "03-agents"
+order: 1
+difficulty: "advanced"
+tags:
+  - agents
+  - react
+  - tool-calling
+  - function-calling
+  - reasoning
+slug: "react-pattern"
+---
+
+## Introduction
+
+The ReAct (Reasoning + Acting) pattern is the foundation of modern LLM agents. It interleaves reasoning traces with tool calls, allowing the model to think, act, and observe in a loop.
+
+## The ReAct Loop
+
+<Mermaid chart={`
+graph TD
+  Start["User Input"] --> Thought["Thought: Reason about state"]
+  Thought --> Action["Action: Call a tool"]
+  Action --> Observation["Observation: Tool result"]
+  Observation --> Thought
+  Observation --> Final["Final Answer"]
+  Final --> End["Output Response"]
+
+  style Start fill:#1e293b,stroke:#3b82f6
+  style Final fill:#1e293b,stroke:#22c55e
+  style End fill:#1e293b,stroke:#3b82f6
+`} />
+
+```
+Thought → Action → Observation → Thought → Action → Observation → Final Answer
+```
+
+Each cycle:
+1. **Thought**: The LLM reasons about the current state
+2. **Action**: The LLM calls a tool with specific arguments
+3. **Observation**: The tool result is fed back to the LLM
+
+## Defining Tools
+
+Tools are functions with typed signatures that the LLM can invoke:
+
+```python
+from pydantic import BaseModel
+
+class SearchTool(BaseModel):
+    query: str
+
+class CalculatorTool(BaseModel):
+    expression: str
+
+def search(query: str) -> str:
+    """Simulate a web search."""
+    results = {"weather NYC": "72°F, partly cloudy"}
+    return results.get(query, "No results found.")
+
+def calculate(expression: str) -> str:
+    """Evaluate a mathematical expression."""
+    try:
+        return str(eval(expression))
+    except Exception as e:
+        return f"Error: {e}"
+```
+
+## Building the ReAct Agent
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search",
+            "description": "Search the web for information",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "calculate",
+            "description": "Perform a calculation",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "expression": {"type": "string"}
+                },
+                "required": ["expression"]
+            }
+        }
+    }
+]
+```
+
+### The ReAct Loop Implementation
+
+```python
+def react_agent(user_query: str, max_steps: int = 5):
+    messages = [{"role": "user", "content": user_query}]
+    step = 0
+
+    while step < max_steps:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            tools=tools,
+        )
+
+        message = response.choices[0].message
+        messages.append(message)
+
+        if message.tool_calls:
+            for tool_call in message.tool_calls:
+                fn = tool_call.function
+                if fn.name == "search":
+                    result = search(fn.arguments["query"])
+                elif fn.name == "calculate":
+                    result = calculate(fn.arguments["expression"])
+
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": result,
+                })
+        else:
+            # No tool calls — final answer
+            return message.content
+
+        step += 1
+
+    return "Max steps reached."
+```
+
+## Adding Observability
+
+Track each step of the ReAct loop:
+
+```python
+class ReActLogger:
+    def __init__(self):
+        self.steps: list[dict] = []
+
+    def log(self, step: int, thought: str, action: str, observation: str):
+        self.steps.append({
+            "step": step,
+            "thought": thought,
+            "action": action,
+            "observation": observation,
+        })
+
+    def visualize(self):
+        for s in self.steps:
+            print(f"Step {s['step']}:")
+            print(f"  Thought: {s['thought']}")
+            print(f"  Action: {s['action']}")
+            print(f"  Observation: {s['observation']}")
+```
+
+## Key Takeaways
+
+- ReAct interleaves reasoning traces with tool execution for transparent agent behavior
+- Structured tool definitions (typed parameters) reduce parsing errors
+- Always cap the number of ReAct steps to prevent infinite loops
+- Observability is critical — log every Thought/Action/Observation cycle
+
+## Next Steps
+
+Dive into Fine-Tuning to learn how to customize models for your specific agent tasks.

@@ -1,0 +1,64 @@
+---
+title: "Groq LPU: Ultra-Fast LLM Inference"
+description: "Leverage Groq's Language Processing Units for sub-200ms inference at scale."
+category: "04-finetuning"
+order: 2
+difficulty: "intermediate"
+tags:
+  - groq
+  - inference
+  - lpu
+  - performance
+  - llm
+slug: "groq-inference"
+---
+
+## Introduction
+
+Groq's Language Processing Unit (LPU) is a custom tensor processor designed for ultra-low-latency LLM inference. Unlike GPUs, the LPU eliminates scheduling overhead for deterministic, predictable performance.
+
+## Groq API Quickstart
+
+```python
+from groq import Groq
+
+client = Groq(api_key="gsk_your_key")
+
+completion = client.chat.completions.create(
+    model="llama-3.3-70b-versatile",
+    messages=[{"role": "user", "content": "Explain LPU architecture"}],
+    temperature=0.7,
+    max_tokens=512,
+)
+
+print(completion.choices[0].message.content)
+```
+
+## Streaming Response
+
+```python
+stream = client.chat.completions.create(
+    model="llama-3.3-70b-versatile",
+    messages=[{"role": "user", "content": "Write a poem about AI"}],
+    stream=True,
+)
+
+for chunk in stream:
+    print(chunk.choices[0].delta.content or "", end="")
+```
+
+## Performance Benchmarks
+
+| Metric | GPU (A100) | Groq LPU |
+|--------|-----------|----------|
+| Latency (70B) | ~800ms | ~150ms |
+| Tokens/sec | ~120 | ~480 |
+| Cost/1M tokens | ~$0.59 | ~$0.59 |
+| Deterministic | No | Yes |
+
+## Key Takeaways
+
+- Groq LPUs deliver 3-5x lower latency than equivalent GPUs
+- Deterministic execution eliminates output variance
+- Ideal for real-time applications like chatbots and code generation
+- API is OpenAI-compatible for easy migration

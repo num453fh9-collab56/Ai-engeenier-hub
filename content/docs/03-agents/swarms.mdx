@@ -1,0 +1,74 @@
+---
+title: "Multi-Agent Swarms & Delegation"
+description: "Design agent communication, task decomposition, and consensus mechanisms for multi-agent systems."
+category: "03-agents"
+order: 2
+difficulty: "advanced"
+tags:
+  - agents
+  - multi-agent
+  - swarms
+  - orchestration
+  - communication
+slug: "swarms"
+---
+
+## Introduction
+
+Multi-agent systems coordinate multiple LLM agents to solve complex tasks through decomposition, delegation, and consensus.
+
+## Agent Communication Patterns
+
+<Mermaid chart={`
+graph LR
+    Coordinator["Coordinator Agent"] --> Worker1["Worker 1"]
+    Coordinator --> Worker2["Worker 2"]
+    Coordinator --> Worker3["Worker 3"]
+    Worker1 --> Validator["Validator Agent"]
+    Worker2 --> Validator
+    Worker3 --> Validator
+    Validator --> Coordinator
+`} />
+
+## Task Decomposition
+
+```python
+from pydantic import BaseModel
+
+class Task(BaseModel):
+    id: str
+    description: str
+    dependencies: list[str]
+    assigned_to: str | None = None
+
+class Decomposition(BaseModel):
+    tasks: list[Task]
+    parallel_groups: list[list[str]]
+
+def decompose(goal: str) -> Decomposition:
+    """Split a complex goal into dependent and parallel tasks."""
+    # LLM call to decompose
+    pass
+```
+
+## Consensus Mechanism
+
+```python
+async def reach_consensus(
+    agents: list[str],
+    proposal: str,
+) -> str:
+    votes = await asyncio.gather(*[
+        query_agent(agent, f"Approve or reject: {proposal}")
+        for agent in agents
+    ])
+    approvals = sum(1 for v in votes if "approve" in v.lower())
+    return "approved" if approvals > len(agents) / 2 else "rejected"
+```
+
+## Key Takeaways
+
+- Use a coordinator agent for task decomposition and result aggregation
+- Implement validator agents for cross-checking outputs
+- Design clear communication protocols between agents
+- Always include human-in-the-loop for critical decisions

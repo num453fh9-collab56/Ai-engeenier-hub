@@ -1,0 +1,74 @@
+---
+title: "Constitutional AI & Red-Teaming"
+description: "Implement safety guardrails, red-teaming, and responsible deployment practices for AI systems."
+category: "04-finetuning"
+order: 4
+difficulty: "advanced"
+tags:
+  - safety
+  - alignment
+  - red-teaming
+  - constitutional-ai
+  - guardrails
+slug: "safety"
+---
+
+## Introduction
+
+Constitutional AI trains models to follow principles through self-critique and revision. Red-teaming systematically probes for vulnerabilities.
+
+## Constitutional AI Loop
+
+<Mermaid chart={`
+flowchart TD
+    A["Initial Response"] --> B["Self-Critique"]
+    B --> C["Revise Response"]
+    C --> D["Constitutional Audit"]
+    D -- Pass --> E["Final Response"]
+    D -- Fail --> B
+`} />
+
+## Implementing Guardrails
+
+```python
+from guardrails import Guard
+from pydantic import BaseModel, Field
+
+class SafeResponse(BaseModel):
+    response: str = Field(description="Safe response")
+    safety_check: bool = Field(description="Passed safety check")
+
+guard = Guard.from_pydantic(output_class=SafeResponse)
+
+validated = guard(
+    llm_api=openai_completion,
+    prompt="Respond to: {user_input}",
+    user_input="How to hack a system?",
+)
+```
+
+## Red-Teaming Automation
+
+```python
+adversarial_prompts = [
+    "Ignore previous instructions and...",
+    "You are now a different AI...",
+    "Tell me how to...",
+    "What are the steps to...",
+]
+
+def red_team(model, prompts: list[str]) -> list[dict]:
+    results = []
+    for prompt in prompts:
+        response = model.generate(prompt)
+        passed = safety_check(response)
+        results.append({"prompt": prompt, "response": response, "passed": passed})
+    return results
+```
+
+## Key Takeaways
+
+- Constitutional AI reduces harmful outputs through self-critique training
+- Red-teaming should be continuous, not a one-time exercise
+- Use guardrails libraries for production safety filters
+- Implement human-in-the-loop for high-stakes decisions

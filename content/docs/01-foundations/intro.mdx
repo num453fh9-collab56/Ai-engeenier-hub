@@ -1,0 +1,129 @@
+---
+title: "Python Async & Structured Outputs in LLMs"
+description: "Learn how to leverage Python's async capabilities and structured output parsing with LLMs using Pydantic and instructor"
+category: "01-foundations"
+order: 1
+difficulty: "intermediate"
+tags:
+  - python
+  - async
+  - structured-outputs
+  - pydantic
+  - instructor
+slug: "intro"
+---
+
+## Introduction
+
+Modern LLM applications demand more than simple text responses. We need structured, type-safe outputs and concurrent request handling to build production-grade systems.
+
+In this tutorial, we'll explore:
+
+- **Structured Outputs**: Parsing LLM responses into typed Pydantic models
+- **Async Python**: Using `asyncio` for concurrent LLM requests
+- **The `instructor` Library**: A powerful wrapper for structured outputs
+
+## Why Structured Outputs?
+
+Raw LLM responses are strings. To build reliable software, you need structured data:
+
+```python
+# Raw response — fragile and unpredictable
+response = llm.complete("Extract: John is 30 years old")
+# "The person's name is John and they are 30 years old."
+
+# Structured response — type-safe and predictable
+class Person(BaseModel):
+    name: str
+    age: int
+
+person = extract_person("John is 30 years old")
+# Person(name="John", age=30)
+```
+
+### The Problem with Prompting
+
+Without structured output, you rely on prompt engineering to get consistent JSON. This approach is brittle — small prompt changes can break your parsing logic.
+
+## Setting Up Async Client
+
+Let's build an async LLM client using OpenAI and `instructor`:
+
+```python
+import instructor
+from openai import AsyncOpenAI
+from pydantic import BaseModel
+
+client = instructor.from_openai(AsyncOpenAI())
+
+class ExtractResult(BaseModel):
+    entities: list[str]
+    sentiment: str
+    confidence: float
+
+async def extract_entities(text: str) -> ExtractResult:
+    return await client.chat.completions.create(
+        model="gpt-4o",
+        response_model=ExtractResult,
+        messages=[
+            {"role": "user", "content": f"Analyze: {text}"}
+        ],
+    )
+```
+
+### Batch Processing with asyncio
+
+The real power comes when you process many items concurrently:
+
+```python
+async def process_batch(texts: list[str]) -> list[ExtractResult]:
+    tasks = [extract_entities(text) for text in texts]
+    return await asyncio.gather(*tasks)
+
+# Process 50 documents concurrently
+texts = load_documents()
+results = await process_batch(texts)
+```
+
+## Advanced: Streaming Structured Outputs
+
+You can stream structured outputs for real-time UX:
+
+```python
+async def stream_classification(text: str):
+    async for chunk in client.chat.completions.create(
+        model="gpt-4o",
+        response_model=ExtractResult,
+        stream=True,
+        messages=[{"role": "user", "content": text}],
+    ):
+        yield chunk  # Partial ExtractResult objects
+```
+
+## Error Handling & Retries
+
+Production code needs robust error handling:
+
+```python
+import asyncio
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
+async def safe_extract(text: str) -> ExtractResult:
+    try:
+        return await extract_entities(text)
+    except Exception as e:
+        print(f"Extraction failed: {e}")
+        raise
+```
+
+## Key Takeaways
+
+- Structured outputs turn LLM responses into type-safe, validated data
+- Async Python with `asyncio.gather` dramatically improves throughput
+- The `instructor` library bridges the gap between LLMs and Pydantic
+- Always implement retry logic for production reliability
+
+## Next Steps
+
+Explore our RAG module to see how structured extraction feeds into retrieval-augmented generation pipelines.

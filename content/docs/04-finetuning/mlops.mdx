@@ -1,0 +1,79 @@
+---
+title: "MLOps: Deploy & Monitor at Scale"
+description: "Model serving, observability, A/B testing, and CI/CD for ML pipelines."
+category: "04-finetuning"
+order: 3
+difficulty: "advanced"
+tags:
+  - mlops
+  - deployment
+  - monitoring
+  - kubernetes
+  - ci-cd
+slug: "mlops"
+---
+
+## Introduction
+
+MLOps applies DevOps principles to machine learning. This guide covers model serving, observability, A/B testing, and CI/CD for production ML systems.
+
+## Model Serving with vLLM
+
+```python
+from vllm import LLM, SamplingParams
+
+llm = LLM(model="meta-llama/Llama-2-7b-hf")
+params = SamplingParams(temperature=0.7, max_tokens=256)
+
+outputs = llm.generate(["Explain MLOps"], params)
+print(outputs[0].outputs[0].text)
+```
+
+## Observability Stack
+
+```python
+import mlflow
+
+mlflow.set_tracking_uri("http://localhost:5000")
+
+with mlflow.start_run():
+    mlflow.log_param("model", "llama-7b")
+    mlflow.log_metric("latency_ms", 450)
+    mlflow.log_metric("throughput_tps", 120)
+    mlflow.register_model("runs:/<run_id>/model", "production-model")
+```
+
+## A/B Testing
+
+```python
+import random
+
+def select_model(user_id: str) -> str:
+    hash_val = hash(user_id) % 100
+    if hash_val < 10:    return "model-v2-canary"
+    if hash_val < 50:    return "model-v2-50pct"
+    return "model-v1-control"
+```
+
+## CI/CD Pipeline
+
+```yaml
+# .github/workflows/ml-pipeline.yml
+name: ML Pipeline
+on: [push]
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python train.py
+      - run: python evaluate.py
+      - run: python deploy.py --environment staging
+```
+
+## Key Takeaways
+
+- Use dedicated model serving frameworks (vLLM, TGI, Triton) for production
+- Log all metrics with MLflow or similar for traceability
+- Implement gradual rollouts with canary deployments
+- Monitor drift, latency, and throughput continuously

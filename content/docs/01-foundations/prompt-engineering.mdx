@@ -1,0 +1,84 @@
+---
+title: "Prompt Engineering & Structured Outputs"
+description: "Chain-of-thought, function calling, and grammar-sampled structured generation."
+category: "01-foundations"
+order: 2
+difficulty: "beginner"
+tags:
+  - prompt-engineering
+  - structured-outputs
+  - chain-of-thought
+  - function-calling
+  - llm
+slug: "prompt-engineering"
+---
+
+## Introduction
+
+Prompt engineering is the art of designing inputs to LLMs to produce reliable, structured outputs. This guide covers patterns from basic prompting to advanced grammar-sampled generation.
+
+## Chain-of-Thought Prompting
+
+```python
+prompt = """
+Solve this step by step:
+
+Question: A store has 24 apples. They sell 8 apples and then receive
+a shipment of 15 more. How many apples do they have now?
+
+Step 1: Start with 24 apples.
+Step 2: Subtract 8 sold apples: 24 - 8 = 16.
+Step 3: Add 15 from shipment: 16 + 15 = 31.
+Answer: 31
+"""
+```
+
+## Structured Outputs with Pydantic
+
+```python
+from pydantic import BaseModel
+from instructor import from_openai
+from openai import OpenAI
+
+client = from_openai(OpenAI())
+
+class ExtractResult(BaseModel):
+    entities: list[str]
+    sentiment: str
+    confidence: float
+
+result = client.chat.completions.create(
+    model="gpt-4o",
+    response_model=ExtractResult,
+    messages=[{"role": "user", "content": "Analyze: Amazing product!"}],
+)
+# ExtractResult(entities=["product"], sentiment="positive", confidence=0.95)
+```
+
+## Function Calling
+
+```python
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_docs",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "limit": {"type": "integer"},
+                },
+                "required": ["query"],
+            },
+        },
+    }
+]
+```
+
+## Key Takeaways
+
+- Always specify the output format explicitly in the prompt
+- Use Pydantic models for type-safe structured outputs
+- Chain-of-thought improves reasoning accuracy by 15-30%
+- Function calling enables reliable tool use

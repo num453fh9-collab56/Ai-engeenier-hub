@@ -1,0 +1,67 @@
+---
+title: "RAG Evaluation with RAGAS"
+description: "Measure faithfulness, relevance, and precision of your RAG pipelines."
+category: "02-rag"
+order: 3
+difficulty: "intermediate"
+tags:
+  - rag
+  - evaluation
+  - ragas
+  - metrics
+  - testing
+slug: "rag-eval"
+---
+
+## Introduction
+
+RAGAS (RAG Assessment) provides automated metrics for evaluating RAG pipeline quality: faithfulness, answer relevance, context precision, and context recall.
+
+## Key Metrics
+
+| Metric | What It Measures | Range |
+|--------|-----------------|-------|
+| Faithfulness | Is the answer grounded in the context? | 0-1 |
+| Answer Relevance | Does the answer address the question? | 0-1 |
+| Context Precision | Are retrieved docs relevant? | 0-1 |
+| Context Recall | Are all relevant docs retrieved? | 0-1 |
+
+## RAGAS Evaluation
+
+```python
+from ragas import evaluate
+from ragas.metrics import faithfulness, answer_relevancy
+from datasets import Dataset
+
+data = Dataset.from_dict({
+    "question": ["What is RAG?"],
+    "answer": ["RAG retrieves documents before generating answers."],
+    "contexts": [["RAG stands for Retrieval-Augmented Generation."]],
+})
+
+results = evaluate(data, metrics=[faithfulness, answer_relevancy])
+print(results)
+```
+
+## Building an Evaluation Pipeline
+
+```python
+def evaluate_rag_pipeline(
+    questions: list[str],
+    ground_truth: list[str],
+) -> dict:
+    answers = [rag_pipeline(q) for q in questions]
+    data = Dataset.from_dict({
+        "question": questions,
+        "answer": answers,
+        "contexts": [["...relevant docs..."]] * len(questions),
+    })
+    return evaluate(data, metrics=[faithfulness, answer_relevancy, context_precision])
+```
+
+## Key Takeaways
+
+- Always evaluate RAG pipelines systematically before production deployment
+- Faithfulness is the most critical metric — hallucinations break user trust
+- Track metrics over time to catch regression after changes
+- Use synthetic test sets when human-annotated data is unavailable

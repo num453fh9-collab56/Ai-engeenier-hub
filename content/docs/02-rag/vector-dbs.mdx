@@ -1,0 +1,91 @@
+---
+title: "Vector Databases: Pinecone, Qdrant & PGVector"
+description: "Compare architectures, indexing strategies, and production deployment patterns for vector databases."
+category: "02-rag"
+order: 2
+difficulty: "intermediate"
+tags:
+  - vector-databases
+  - pinecone
+  - qdrant
+  - pgvector
+  - embeddings
+  - similarity-search
+slug: "vector-dbs"
+---
+
+## Introduction
+
+Vector databases store and query embeddings using approximate nearest neighbor (ANN) search. This guide compares three leading options.
+
+## Indexing Strategies
+
+| Index Type | Pinecone | Qdrant | PGVector |
+|-----------|----------|--------|----------|
+| HNSW | ✅ | ✅ | ✅ |
+| IVF | — | ✅ | ✅ |
+| Scalar Quantization | ✅ | ✅ | — |
+| Product Quantization | ✅ | ✅ | — |
+
+## Pinecone Example
+
+```python
+import pinecone
+
+pinecone.init(api_key="your-key", environment="gcp-starter")
+index = pinecone.Index("rag-index")
+
+index.upsert(vectors=[
+    ("id1", [0.1, 0.2, ...], {"text": "doc1"}),
+    ("id2", [0.3, 0.4, ...], {"text": "doc2"}),
+])
+
+results = index.query(
+    vector=[0.15, 0.25, ...],
+    top_k=5,
+    include_metadata=True,
+)
+```
+
+## Qdrant Example
+
+```python
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams
+
+client = QdrantClient("localhost", port=6333)
+client.create_collection(
+    collection_name="docs",
+    vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+)
+
+client.upsert(
+    collection_name="docs",
+    points=[
+        {"id": 1, "vector": [0.1, 0.2, ...], "payload": {"text": "doc1"}},
+    ],
+)
+```
+
+## PGVector Example
+
+```sql
+CREATE EXTENSION vector;
+CREATE TABLE documents (
+    id SERIAL PRIMARY KEY,
+    content TEXT,
+    embedding vector(1536)
+);
+
+CREATE INDEX ON documents USING hnsw (embedding vector_cosine_ops);
+
+SELECT content FROM documents
+ORDER BY embedding <=> '[0.1, 0.2, ...]'
+LIMIT 5;
+```
+
+## Key Takeaways
+
+- Pinecone: best for zero-ops, high-scale managed deployments
+- Qdrant: best for self-hosted with advanced filtering
+- PGVector: best when you already use PostgreSQL and need transactional guarantees
