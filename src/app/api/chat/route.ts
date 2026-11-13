@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { MUBEEN_PERSONA } from "@/lib/mubeen";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -10,8 +11,7 @@ const MAX_CONTEXT_CHARS = 6_000; // lesson / RAG reference text
 // (Groq retired llama-3.3-70b-versatile; check https://console.groq.com/docs/models)
 const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
-const SYSTEM_PROMPT =
-  "You are an elite Principal AI Engineer. Provide concise, production-grade advice on RAG, AI Agents, Fine-Tuning, and MLOps. Keep responses under 200 words and focus on actionable insights.";
+const SYSTEM_PROMPT = MUBEEN_PERSONA;
 
 export async function POST(request: NextRequest) {
   try {

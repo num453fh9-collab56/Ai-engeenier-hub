@@ -165,7 +165,7 @@ export default async function DocPage({ params }: PageProps) {
             <p className="text-lg text-muted-foreground mb-4">{doc.description}</p>
             <div className="flex flex-wrap items-center justify-between gap-3 border-y border-border py-3">
               <div className="flex items-center gap-3">
-                <LogoMark size={36} />
+                <LogoMark size={36} withBrackets={false} />
                 <div className="text-xs leading-tight">
                   <p className="font-medium">AI Engineering Hub</p>
                   <p className="text-muted-foreground">

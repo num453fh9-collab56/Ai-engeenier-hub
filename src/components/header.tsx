@@ -15,7 +15,7 @@ export function Header() {
           href="/"
           className="flex items-center gap-2 font-semibold text-sm shrink-0"
         >
-          <LogoMark size={28} />
+          <LogoMark size={24} />
           <span className="hidden sm:inline">
             AI Engineering <span className="text-primary">Hub</span>
           </span>

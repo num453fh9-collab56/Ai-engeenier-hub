@@ -2,12 +2,11 @@
 
 import { useState, useRef, useEffect, type FormEvent } from "react";
 import { cn } from "@/lib/utils";
+import { MubeenAvatar } from "@/components/mubeen-avatar";
 import {
-  Bot,
   X,
   Send,
   Loader2,
-  MessageSquare,
   ChevronRight,
 } from "lucide-react";
 
@@ -19,7 +18,7 @@ interface Message {
 const WELCOME: Message = {
   role: "assistant",
   content:
-    "Hi! I'm your AI Engineering assistant. Ask me about RAG, agents, fine-tuning, or MLOps.",
+    "Hi, I'm Mubeen 👋 — your AI mentor. Ask me anything about LLMs, RAG, agents or fine-tuning, and I'll explain it clearly. (Roman Urdu bhi chalegi!)",
 };
 
 export function AiAssistant() {
@@ -57,9 +56,8 @@ export function AiAssistant() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [
-            { role: "user", content: trimmed },
-          ],
+          // send the recent conversation so Mubeen remembers context
+          messages: [...messages.slice(1), userMessage].slice(-10),
         }),
       });
 
@@ -94,17 +92,18 @@ export function AiAssistant() {
       <div
         className={cn(
           "fixed bottom-4 right-4 z-50 flex flex-col transition-all duration-300",
-          open ? "w-[380px] h-[560px]" : "w-auto h-auto"
+          open ? "w-[min(380px,calc(100vw-2rem))] h-[min(560px,calc(100dvh-2rem))]" : "w-auto h-auto"
         )}
       >
         {open ? (
           <div className="flex flex-1 flex-col rounded-xl border border-border bg-card shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div className="flex items-center gap-2">
-                <div className="flex items-center justify-center rounded-full bg-primary/10 p-1.5">
-                  <Bot className="size-4 text-primary" />
-                </div>
-                <span className="text-sm font-medium">AI Engineer</span>
+                <MubeenAvatar size={30} />
+                <span className="leading-tight">
+                  <span className="block text-sm font-semibold">Mubeen</span>
+                  <span className="block text-[11px] text-muted-foreground">your AI mentor</span>
+                </span>
               </div>
               <button
                 onClick={() => setOpen(false)}
@@ -127,9 +126,7 @@ export function AiAssistant() {
                   )}
                 >
                   {msg.role === "assistant" && (
-                    <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                      <Bot className="size-3.5 text-primary" />
-                    </div>
+                    <MubeenAvatar size={24} className="mt-0.5 shrink-0" />
                   )}
                   <div
                     className={cn(
@@ -145,9 +142,7 @@ export function AiAssistant() {
               ))}
               {loading && (
                 <div className="flex gap-2">
-                  <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                    <Bot className="size-3.5 text-primary" />
-                  </div>
+                  <MubeenAvatar size={24} className="mt-0.5 shrink-0" />
                   <div className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
                     <Loader2 className="size-4 animate-spin" />
                   </div>
@@ -162,7 +157,7 @@ export function AiAssistant() {
               <input
                 ref={inputRef}
                 type="text"
-                placeholder="Ask about RAG, agents..."
+                placeholder="Ask Mubeen…"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
@@ -181,8 +176,8 @@ export function AiAssistant() {
             onClick={() => setOpen(true)}
             className="group flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2.5 shadow-lg transition-all hover:shadow-xl hover:border-primary/50"
           >
-            <MessageSquare className="size-4 text-primary" />
-            <span className="text-sm font-medium">AI Assistant</span>
+            <MubeenAvatar size={26} />
+            <span className="text-sm font-medium">Ask Mubeen</span>
             <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
           </button>
         )}

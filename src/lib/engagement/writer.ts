@@ -1,4 +1,5 @@
 import type { EmailContent, NudgeFacts } from "./types";
+import { MUBEEN_PERSONA } from "@/lib/mubeen";
 
 // The agent's "pen": turns verified facts into a short, friendly email.
 // Provider-agnostic — any OpenAI-compatible API works. Today: Groq (free).
@@ -7,7 +8,10 @@ const LLM_BASE_URL = process.env.LLM_BASE_URL || "https://api.groq.com/openai/v1
 const LLM_API_KEY = process.env.LLM_API_KEY || process.env.GROQ_API_KEY || "";
 const LLM_MODEL = process.env.LLM_MODEL || process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
-const STYLE = `You write short re-engagement emails for "AI Engineering Hub", a free AI-engineering course site.
+const STYLE = `${MUBEEN_PERSONA}
+
+Right now you are writing a short personal email to a learner, as Mubeen (first person: "I").
+The email is automatically signed "— Mubeen", so do not add your own sign-off.
 Rules:
 - Use ONLY the facts provided. Never invent numbers, deadlines, prizes or features.
 - Friendly, encouraging, specific. 60-110 words in total. Plain language.

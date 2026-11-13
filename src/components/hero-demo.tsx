@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Bot, Loader2 } from "lucide-react";
+import { ArrowUp, Loader2 } from "lucide-react";
+import { MubeenAvatar } from "@/components/mubeen-avatar";
 
 const suggestions = [
   "What is RAG, in 3 lines?",
@@ -80,7 +81,7 @@ export function HeroDemo({ embedded = false }: { embedded?: boolean }) {
           <span className="size-2.5 rounded-full bg-amber-400/80" />
           <span className="size-2.5 rounded-full bg-emerald-400/80" />
           <span className="ml-2 text-xs text-muted-foreground font-mono">
-            ask-an-ai-engineer
+            mubeen · your AI mentor
           </span>
           <span className="ml-auto inline-flex items-center gap-1.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
             <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -92,7 +93,7 @@ export function HeroDemo({ embedded = false }: { embedded?: boolean }) {
           {!question && (
             <div className="text-muted-foreground">
               <p className="mb-3">
-                Ask anything about LLMs, RAG or agents — try one:
+                Hi, I&apos;m Mubeen 👋 Ask me anything about LLMs, RAG or agents — try one:
               </p>
               <div className="flex flex-col gap-2">
                 {suggestions.map((s) => (
@@ -113,7 +114,7 @@ export function HeroDemo({ embedded = false }: { embedded?: boolean }) {
                 {question}
               </div>
               <div className="flex gap-2">
-                <Bot className="size-4 mt-0.5 shrink-0 text-primary" />
+                <MubeenAvatar size={22} className="mt-0.5 shrink-0" />
                 <div className="whitespace-pre-wrap leading-relaxed">
                   {loading ? (
                     <Loader2 className="size-4 animate-spin text-muted-foreground" />
