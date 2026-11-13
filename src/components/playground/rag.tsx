@@ -80,6 +80,7 @@ export function RagPlayground({ chunks }: { chunks: Chunk[] }) {
         }),
       });
       if (res.ok) reply = (await res.json()).message ?? "";
+      else if (res.status === 429) reply = (await res.json()).error ?? ""; // rate-limit message from Mubeen
     } catch {}
     if (id !== requestId.current) return; // a newer search started — drop this stale answer
     setLoading(false);

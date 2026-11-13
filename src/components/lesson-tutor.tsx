@@ -41,6 +41,7 @@ export function LessonTutor({ title, context }: { title: string; context: string
         }),
       });
       if (res.ok) reply = (await res.json()).message ?? "";
+      else if (res.status === 429) reply = (await res.json()).error ?? ""; // rate-limit message from Mubeen
     } catch {}
     setMsgs([
       ...next,

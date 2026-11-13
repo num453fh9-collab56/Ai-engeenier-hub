@@ -61,6 +61,7 @@ export function HeroDemo({ embedded = false }: { embedded?: boolean }) {
         body: JSON.stringify({ messages: [{ role: "user", content: text }] }),
       });
       if (res.ok) reply = (await res.json()).message ?? "";
+      else if (res.status === 429) reply = (await res.json()).error ?? ""; // rate-limit message from Mubeen
     } catch {}
     if (!reply)
       reply =

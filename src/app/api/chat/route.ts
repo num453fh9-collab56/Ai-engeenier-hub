@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { MUBEEN_PERSONA } from "@/lib/mubeen";
+import { checkChatLimits, clientIp } from "@/lib/rate-limit";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -14,6 +15,15 @@ const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 const SYSTEM_PROMPT = MUBEEN_PERSONA;
 
 export async function POST(request: NextRequest) {
+  // Rate limit first, before any work or API cost (stops spam and runaway bills)
+  const limited = checkChatLimits(clientIp(request));
+  if (limited) {
+    return NextResponse.json(
+      { error: limited.error },
+      { status: 429, headers: { "Retry-After": String(limited.retryAfterSec) } }
+    );
+  }
+
   try {
     const body = await request.json();
     const { messages: rawMessages, context } = body as {
