@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import { SITE_URL } from "@/lib/site";
 import type { Metadata } from "next";
 import { MDXRemote } from "next-mdx-remote/rsc";
@@ -7,8 +8,6 @@ import { readingTime } from "@/lib/reading-time";
 import { TableOfContents } from "@/components/toc";
 import { Newsletter } from "@/components/newsletter";
 import { mdxComponents } from "@/components/mdx-components";
-import { DocFallback } from "@/components/doc-fallback";
-import { courses } from "@/lib/course-data";
 import { quizzes } from "@/lib/quizzes";
 import { toPlain } from "@/lib/plain-text";
 import { LessonQuiz } from "@/components/lesson-quiz";
@@ -34,12 +33,6 @@ export async function generateStaticParams() {
     category: doc.category,
     slug: doc.slug,
   }));
-}
-
-function findCourse(category: string, slug: string) {
-  return courses.find(
-    (c) => c.categorySlug === category && c.slug === slug
-  ) ?? courses.find((c) => c.slug === slug);
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -77,25 +70,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     };
   }
 
-  const course = findCourse(category, slug);
-  if (course) {
-    return {
-      title: course.title,
-      description: course.description,
-      keywords: [course.category, course.provider, "AI Engineering", "tutorial"],
-      openGraph: {
-        title: course.title,
-        description: course.description,
-        type: "article",
-        images: [{ url: "/og-default.png", width: 1200, height: 630, alt: course.title }],
-      },
-      twitter: { card: "summary_large_image", title: course.title, description: course.description },
-      robots: { index: true, follow: true },
-      alternates: { canonical: `/docs/${category}/${slug}` },
-    };
-  }
-
-  return { title: "AI Engineering Tutorial", robots: { index: true, follow: true } };
+  return { title: "Lesson not found", robots: { index: false } };
 }
 
 export default async function DocPage({ params }: PageProps) {
@@ -238,50 +213,6 @@ export default async function DocPage({ params }: PageProps) {
     );
   }
 
-  // Fallback: show dynamically generated deep-research template
-  const course = findCourse(category, slug);
-  const fallbackTitle = course?.title ?? slug
-    .replace(/-/g, " ")
-    .replace(/\b\w/g, (l) => l.toUpperCase());
-  const fallbackDesc = course?.description ?? `In-depth guide on ${fallbackTitle} for AI engineers.`;
-  const fallbackLevel = course?.level ?? "Intermediate";
-  const fallbackProvider = course?.provider ?? category.replace(/^\d+-/, "").replace(/-/g, " ");
-
-  return (
-    <div className="flex">
-      <DocFallback
-        doc={{
-          title: fallbackTitle,
-          description: fallbackDesc,
-          provider: fallbackProvider,
-          category: category.replace(/^\d+-/, "").replace(/-/g, " "),
-          level: fallbackLevel,
-          duration: course?.duration ?? "3 hours",
-          rating: course?.rating ?? 4.5,
-          slug,
-        }}
-      />
-      <aside className="w-56 shrink-0 hidden xl:block">
-        <div className="sticky top-20 overflow-y-auto">
-          <h2 className="mb-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            On This Page
-          </h2>
-          <nav className="space-y-1">
-            <a href="#" className="block text-sm text-muted-foreground hover:text-foreground transition-colors py-0.5">
-              Syllabus
-            </a>
-            <a href="#" className="block text-sm text-muted-foreground hover:text-foreground transition-colors py-0.5">
-              Prerequisites
-            </a>
-            <a href="#" className="block text-sm text-muted-foreground hover:text-foreground transition-colors py-0.5">
-              Code Example
-            </a>
-            <a href="#" className="block text-sm text-muted-foreground hover:text-foreground transition-colors py-0.5">
-              Resources
-            </a>
-          </nav>
-        </div>
-      </aside>
-    </div>
-  );
+  // Unknown lesson: real 404 instead of an invented "lesson" page
+  notFound();
 }
