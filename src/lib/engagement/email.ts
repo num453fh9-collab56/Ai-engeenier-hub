@@ -33,7 +33,10 @@ ${facts.type !== "welcome" ? `<p style="margin:18px 0 6px;font-size:12px;color:#
 <div style="background:#e2e8f0;border-radius:8px;height:8px"><div style="background:#3b82f6;width:${progress}%;height:8px;border-radius:8px"></div></div>` : ""}
 <p style="margin:26px 0 0"><a href="${esc(cta)}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:bold;display:inline-block">${esc(c.ctaText)} &rarr;</a></p>
 </td></tr>
-<tr><td style="padding:0 28px 24px;font-size:15px;color:#334155">— Mubeen<br><span style="font-size:12px;color:#64748b">Your AI mentor at AI Engineering Hub</span></td></tr>
+<tr><td style="padding:0 28px 24px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<td style="padding-right:12px"><img src="${esc(SITE_URL)}/images/mubeen-email.jpg" width="44" height="44" alt="Mubeen" style="border-radius:50%;display:block"></td>
+<td style="font-size:15px;color:#334155">— Mubeen<br><span style="font-size:12px;color:#64748b">Your AI mentor at AI Engineering Hub</span></td>
+</tr></table></td></tr>
 <tr><td style="padding:18px 28px;background:#f8fafc;font-size:12px;color:#64748b;line-height:1.5">
 You're receiving this because you created an account on AI Engineering Hub. We send at most two emails a week.<br>
 <a href="${esc(unsub)}" style="color:#64748b">Unsubscribe</a> &middot; <a href="${esc(SITE_URL)}" style="color:#64748b">Visit the site</a>

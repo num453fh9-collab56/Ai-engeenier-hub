@@ -1,6 +1,23 @@
-// Mubeen's face: a friendly AI mentor with glowing eyes and a spark on his
-// antenna (the spark links him to the site's brand). Pure SVG.
+import Image from "next/image";
+
+// Mubeen's portrait (AI-styled photo). Small sizes use a tight face crop so the
+// face stays recognisable even at 24px; larger sizes use the chest-up portrait.
 export function MubeenAvatar({ size = 32, className = "" }: { size?: number; className?: string }) {
+  const src = size <= 64 ? "/images/mubeen-face.webp" : "/images/mubeen.webp";
+  return (
+    <Image
+      src={src}
+      alt="Mubeen, your AI mentor"
+      width={size}
+      height={size}
+      className={`rounded-full object-cover ring-2 ring-primary/30 ${className}`}
+      style={{ width: size, height: size }}
+    />
+  );
+}
+
+// Original robot illustration — kept as a fallback (e.g. if the photo is removed).
+export function MubeenRobotAvatar({ size = 32, className = "" }: { size?: number; className?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" fill="none" role="img" aria-label="Mubeen" className={className}>
       <defs>
