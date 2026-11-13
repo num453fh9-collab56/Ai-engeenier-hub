@@ -21,9 +21,11 @@ export function CardCarousel({
   const measure = () => {
     const el = track.current;
     if (!el) return;
-    const total = Math.max(1, Math.round(el.scrollWidth / el.clientWidth));
+    const total = Math.max(1, Math.ceil(el.scrollWidth / el.clientWidth - 0.05)); // include a final partial page
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    const progress = maxScroll > 0 ? el.scrollLeft / maxScroll : 0;
     setPages(total);
-    setPage(Math.min(total - 1, Math.round(el.scrollLeft / el.clientWidth)));
+    setPage(Math.min(total - 1, Math.round(progress * (total - 1))));
   };
 
   useEffect(() => {

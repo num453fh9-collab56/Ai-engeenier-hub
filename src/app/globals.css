@@ -249,7 +249,8 @@ pre code > span::before {
     position: fixed; inset: 0; margin: auto; width: 100%; border-radius: 0;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  @page { size: A4 landscape; margin: 0; }
+  @page certificate { size: A4 landscape; margin: 0; }
+  body:has(.certificate) .certificate { page: certificate; }
 }
 
 /* Book printing: hide site chrome, one chapter per page */

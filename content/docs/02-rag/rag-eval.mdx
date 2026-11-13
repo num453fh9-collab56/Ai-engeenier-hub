@@ -106,7 +106,8 @@ golden = [
 def evaluate_retriever(search, golden, k: int = 5) -> dict:
     """search(question, k) must return a list of chunk IDs, best first."""
     hits, reciprocal_ranks, recalls = 0, [], []
-    for row in golden:
+    answerable = [row for row in golden if row["relevant_ids"]]   # "no answer" rows are judged separately
+    for row in answerable:
         results = search(row["question"], k)
         relevant = set(row["relevant_ids"])
 
@@ -115,16 +116,24 @@ def evaluate_retriever(search, golden, k: int = 5) -> dict:
         reciprocal_ranks.append(1 / first_rank if first_rank else 0.0)
         recalls.append(len(relevant & set(results)) / len(relevant))
 
-    n = len(golden)
+    n = len(answerable) or 1
     return {
         f"hit_rate@{k}": hits / n,
         "mrr": sum(reciprocal_ranks) / n,
         f"recall@{k}": sum(recalls) / n,
     }
 
-print(evaluate_retriever(dense_search, golden))
-print(evaluate_retriever(hybrid_search, golden))
+# evaluate_retriever needs chunk IDs. Wrap retrievers that return positions or
+# (position, score) pairs — like the ones in the Hybrid Search lesson:
+chunk_ids = [f"doc-{i}" for i in range(len(docs))]          # your real chunk IDs
+dense_ids  = lambda q, k: [chunk_ids[i] for i in dense_search(q, k)]
+hybrid_ids = lambda q, k: [chunk_ids[i] for i, _score in hybrid_search(q, top_n=k)]
+
+print(evaluate_retriever(dense_ids, golden))
+print(evaluate_retriever(hybrid_ids, golden))
 ```
+
+Questions whose answer is *not* in your documents (`relevant_ids: []`) are skipped here — there is nothing to retrieve. Score them separately: the right behaviour is that the final answer says it doesn't know (an "abstention rate" you check in Step 3).
 
 Run it for every retriever variant you're considering — dense, BM25, hybrid, different chunk sizes — and keep a table of the results. Decisions become obvious.
 

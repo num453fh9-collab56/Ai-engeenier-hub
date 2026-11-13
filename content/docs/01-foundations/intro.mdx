@@ -76,7 +76,7 @@ LLM calls are **I/O-bound**: your CPU does almost nothing while the request trav
 
 - `async def` defines a coroutine; `await` pauses it until a result arrives, letting other coroutines run meanwhile.
 - `asyncio.gather(...)` starts many coroutines and waits for all of them.
-- `asyncio.Semaphore(n)` caps how many run at once — essential, because APIs enforce **rate limits** on requests and tokens per minute.
+- `asyncio.Semaphore(n)` caps how many run at once — an essential first step, because APIs enforce **rate limits** on requests and tokens per minute (a concurrency cap alone doesn't guarantee you stay under them).
 
 With 10 requests in flight, 500 emails that took 20+ minutes sequentially can finish in a few minutes. Total time is roughly the number of batches × the slowest call, not the sum of all calls.
 
@@ -131,10 +131,7 @@ Notice there is no `json.loads` and no string cleanup — `ticket.order_id` is a
 import asyncio
 from openai import AsyncOpenAI
 
-aclient = AsyncOpenAI(max_retries=3, timeout=30)   # SDK retries some transient errors
-limit = asyncio.Semaphore(10)                       # at most 10 requests in flight
-
-async def extract(email: str) -> SupportTicket | None:
+async def extract(aclient: AsyncOpenAI, limit: asyncio.Semaphore, email: str) -> SupportTicket | None:
     async with limit:
         response = await aclient.responses.parse(
             model=MODEL,
@@ -147,8 +144,12 @@ async def extract(email: str) -> SupportTicket | None:
         return response.output_parsed
 
 async def extract_all(emails: list[str]) -> list[SupportTicket | None | Exception]:
-    # return_exceptions=True: one failure doesn't cancel the whole batch
-    return await asyncio.gather(*(extract(e) for e in emails), return_exceptions=True)
+    # Create the client and semaphore inside each run: they belong to this event loop,
+    # so calling asyncio.run(extract_all(...)) again later works safely.
+    limit = asyncio.Semaphore(10)                                   # at most 10 requests in flight
+    async with AsyncOpenAI(max_retries=3, timeout=30) as aclient:   # SDK retries some transient errors
+        # return_exceptions=True: errors are returned in the list instead of raising the first one
+        return await asyncio.gather(*(extract(aclient, limit, e) for e in emails), return_exceptions=True)
 
 results = asyncio.run(extract_all(emails))
 ok = [r for r in results if isinstance(r, SupportTicket)]
@@ -158,8 +159,8 @@ print(f"{len(ok)} parsed, {len(failed)} need attention")
 
 Three details make this production-ready:
 
-1. **The semaphore** keeps you under rate limits no matter how long the list is.
-2. **`return_exceptions=True`** collects errors instead of crashing on the first one.
+1. **The semaphore** caps how many requests run at once, no matter how long the list is. That helps, but it is *not* a rate-limit guarantee: providers also limit requests and tokens per minute, so for big jobs add request pacing and track your token budget too.
+2. **`return_exceptions=True`** returns each error in the results list instead of raising the first one.
 3. **Results keep their order**, so `results[i]` always belongs to `emails[i]` — you can retry exactly the failures.
 
 ## Mini Project: Support Inbox → Spreadsheet
@@ -222,7 +223,7 @@ print("Saved tickets.csv")
 
 - LLMs produce text; Structured Outputs plus a Pydantic schema turn it into validated, typed Python objects.
 - Use `Literal` for fixed choices, `Field(description=...)` as per-field instructions, and `| None` for values that may be missing.
-- LLM calls are I/O-bound — `asyncio.gather` overlaps the waiting, and a `Semaphore` keeps you within rate limits.
+- LLM calls are I/O-bound — `asyncio.gather` overlaps the waiting, and a `Semaphore` caps concurrency (pair it with pacing and token budgets to respect rate limits).
 - Handle failures explicitly: retries with limits, `return_exceptions=True`, refusals and incomplete outputs.
 - A valid schema guarantees the shape, not the truth — always evaluate accuracy on real examples.
 

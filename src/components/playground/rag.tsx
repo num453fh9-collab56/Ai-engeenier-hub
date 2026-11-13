@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Loader2, Search, Sparkles } from "lucide-react";
 
@@ -54,14 +54,17 @@ export function RagPlayground({ chunks }: { chunks: Chunk[] }) {
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [asked, setAsked] = useState(false);
+  const requestId = useRef(0); // only the latest search may update the answer
 
   async function run(q: string) {
     if (!q.trim()) return;
+    const id = ++requestId.current;
     setQuery(q);
     setAsked(true);
     const hits = search(q);
     setResults(hits);
     setAnswer("");
+    setLoading(false);
     if (!hits.length) return;
     setLoading(true);
     let reply = "";
@@ -78,6 +81,7 @@ export function RagPlayground({ chunks }: { chunks: Chunk[] }) {
       });
       if (res.ok) reply = (await res.json()).message ?? "";
     } catch {}
+    if (id !== requestId.current) return; // a newer search started — drop this stale answer
     setLoading(false);
     setAnswer(
       reply ||

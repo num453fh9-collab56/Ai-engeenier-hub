@@ -2,6 +2,19 @@ import { NextRequest } from "next/server";
 import { getAllDocs } from "@/lib/mdx";
 import { trackLabel } from "@/lib/tracks";
 
+// Demote markdown headings one level, skipping fenced code blocks
+// (so "# pip install ..." comments inside code stay unchanged).
+function demoteHeadings(md: string): string {
+  let inFence = false;
+  return md
+    .split("\n")
+    .map((line) => {
+      if (/^\s*```/.test(line)) inFence = !inFence;
+      return !inFence && /^#{1,5} /.test(line) ? `#${line}` : line;
+    })
+    .join("\n");
+}
+
 // Compiles a track's real lesson files into one Markdown book.
 export async function GET(request: NextRequest) {
   const track = request.nextUrl.searchParams.get("track") ?? "";
@@ -31,7 +44,7 @@ export async function GET(request: NextRequest) {
       `> ${d.description}`,
       "",
       // Demote lesson headings one level so chapters stay top-level
-      d.content.replace(/^(#{1,5}) /gm, "#$1 ").trim(),
+      demoteHeadings(d.content).trim(),
       "",
     ]),
   ];

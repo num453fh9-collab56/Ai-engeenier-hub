@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, ExternalLink, GitCompare, Search, SlidersHorizontal, X } from "lucide-react";
 import { aiTools, TOOL_CATEGORIES, type AiTool, type Pricing } from "@/lib/ai-tools";
@@ -42,6 +42,42 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
   const [sort, setSort] = useState<"az" | "category">("category");
   const [compare, setCompare] = useState<string[]>([]);
   const [showCompare, setShowCompare] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRef<HTMLButtonElement>(null);
+
+  // Accessible modal: focus moves in, Tab stays inside, Escape closes,
+  // and focus returns to the button that opened it.
+  useEffect(() => {
+    if (!showCompare) return;
+    const dialog = dialogRef.current;
+    const opener = openerRef.current;
+    const focusables = () =>
+      Array.from(dialog?.querySelectorAll<HTMLElement>('button, [href], [tabindex]:not([tabindex="-1"])') ?? []);
+    focusables()[0]?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowCompare(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const items = focusables();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      opener?.focus();
+    };
+  }, [showCompare]);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const counts = useMemo(() => {
@@ -251,6 +287,7 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
               ))}
             </div>
             <button
+              ref={openerRef}
               onClick={() => setShowCompare(true)}
               disabled={compare.length < 2}
               className="shrink-0 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-40"
@@ -264,6 +301,7 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
       {showCompare && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-6" onClick={() => setShowCompare(false)}>
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label="Compare tools"

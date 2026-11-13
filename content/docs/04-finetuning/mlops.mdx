@@ -89,7 +89,7 @@ Following the vLLM quickstart, start a server (on a machine with a suitable GPU)
 
 ```bash
 pip install vllm
-vllm serve Qwen/Qwen2.5-1.5B-Instruct        # listens on http://localhost:8000 by default
+vllm serve Qwen/Qwen2.5-1.5B-Instruct --host 127.0.0.1    # only reachable from this machine (port 8000)
 ```
 
 Then call it with the standard OpenAI client:
@@ -104,6 +104,8 @@ r = local.chat.completions.create(
 )
 print(r.choices[0].message.content)
 ```
+
+`--host 127.0.0.1` keeps the server private to your machine. If other machines must reach it, also require a key with `--api-key` and put it behind your firewall — otherwise anyone on the network can use your GPU.
 
 **Self-host or use an API?** Self-hosting gives control, privacy and potentially lower cost at high steady volume, but you own GPUs, scaling, upgrades and on-call. Hosted APIs (including fast-inference providers — see [Groq](/docs/04-finetuning/groq-inference)) are simpler for most teams until volume or data rules justify the switch.
 
@@ -138,24 +140,30 @@ PRICE_PER_1M = {"input": 0.50, "output": 1.50}    # example prices — use your 
 
 def logged_call(client, *, model, messages, prompt_version, user_id):
     start = time.perf_counter()
-    r = client.chat.completions.create(model=model, messages=messages)
-    latency = time.perf_counter() - start
+    record = {"id": str(uuid.uuid4()), "ts": time.time(), "user": user_id,
+              "model": model, "prompt_version": prompt_version}
+    try:
+        r = client.chat.completions.create(model=model, messages=messages)
+    except Exception as e:                      # log failures too, so error rate is measurable
+        record.update(status="error", error=type(e).__name__,
+                      latency_s=round(time.perf_counter() - start, 3))
+        _append(record)
+        raise
     u = r.usage
-    record = {
-        "id": str(uuid.uuid4()),
-        "ts": time.time(),
-        "user": user_id,
-        "model": model,
-        "prompt_version": prompt_version,
-        "latency_s": round(latency, 3),
-        "input_tokens": u.prompt_tokens,
-        "output_tokens": u.completion_tokens,
-        "cost_usd": round(u.prompt_tokens / 1e6 * PRICE_PER_1M["input"]
-                          + u.completion_tokens / 1e6 * PRICE_PER_1M["output"], 6),
-    }
+    record.update(
+        status="ok",
+        latency_s=round(time.perf_counter() - start, 3),
+        input_tokens=u.prompt_tokens,
+        output_tokens=u.completion_tokens,
+        cost_usd=round(u.prompt_tokens / 1e6 * PRICE_PER_1M["input"]
+                       + u.completion_tokens / 1e6 * PRICE_PER_1M["output"], 6),
+    )
+    _append(record)
+    return r
+
+def _append(record):
     with open("llm_requests.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps(record) + "\n")
-    return r
 ```
 
 Then watch these signals on a dashboard:

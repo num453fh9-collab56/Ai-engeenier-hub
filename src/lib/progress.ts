@@ -16,6 +16,7 @@ let cacheRaw: string | null = null;
 let cache: Progress = EMPTY;
 
 function read(): Progress {
+  if (memoryOnly) return memoryOnly; // storage failed earlier — show the in-memory state
   let raw: string | null = null;
   try {
     raw = localStorage.getItem(KEY);
@@ -31,11 +32,20 @@ function read(): Progress {
   return cache;
 }
 
-function write(p: Progress) {
+let memoryOnly: Progress | null = null; // used when the browser blocks storage
+
+/** Returns false if progress could only be kept in memory (storage blocked or full). */
+function write(p: Progress): boolean {
+  let saved = true;
   try {
     localStorage.setItem(KEY, JSON.stringify(p));
-  } catch {}
+    memoryOnly = null;
+  } catch {
+    memoryOnly = p; // still show the change in this tab
+    saved = false;
+  }
   window.dispatchEvent(new Event(EVT));
+  return saved;
 }
 
 function subscribe(cb: () => void) {

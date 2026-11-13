@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 import { SITE_URL } from "@/lib/site";
 import type { Metadata } from "next";
 import { MDXRemote } from "next-mdx-remote/rsc";

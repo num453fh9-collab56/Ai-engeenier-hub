@@ -56,7 +56,7 @@ export const quizzes: Record<string, QuizQuestion[]> = {
       q: "What does return_exceptions=True in asyncio.gather give you?",
       options: [
         "Faster requests",
-        "One failure no longer cancels the whole batch; errors are returned in place",
+        "Errors are returned in the results list instead of raising the first exception",
         "Automatic retries",
         "Fewer tokens used",
       ],
@@ -411,7 +411,7 @@ export const quizzes: Record<string, QuizQuestion[]> = {
       q: "According to Anthropic's report, what was the trade-off of its multi-agent research system?",
       options: [
         "Cheaper but less accurate",
-        "Much better results (90.2% on its eval) but about 15× the tokens of a chat",
+        "90.2% better than a single agent on its research eval, but about 15× the tokens of a chat",
         "Same quality, fewer tokens",
         "Faster but unable to use tools",
       ],

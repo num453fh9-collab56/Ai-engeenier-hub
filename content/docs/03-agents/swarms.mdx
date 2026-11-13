@@ -143,6 +143,9 @@ async def synthesize(goal: str, results: list[tuple[SubTask, str]]) -> str:
 
 async def run_team(goal: str) -> str:
     plan = await make_plan(goal)
+    if plan is None or not plan.subtasks:
+        return "Planning failed — no sub-tasks were produced."
+    plan.subtasks = plan.subtasks[:4]          # enforce the 2–4 worker budget in code, not just in the prompt
     for t in plan.subtasks:
         print("delegating:", t.title)
     outputs = await asyncio.gather(*(run_worker(t) for t in plan.subtasks), return_exceptions=True)

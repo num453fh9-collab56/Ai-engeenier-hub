@@ -20,10 +20,11 @@ function tokenize(text: string): string[] {
       continue;
     }
     // first chunk keeps the leading space, like real BPE tokens
+    const chars = Array.from(piece); // code points, so emoji aren't cut in half
     let i = 0;
-    while (i < piece.length) {
+    while (i < chars.length) {
       const size = i === 0 ? 5 : 4;
-      out.push(piece.slice(i, i + size));
+      out.push(chars.slice(i, i + size).join(""));
       i += size;
     }
   }
