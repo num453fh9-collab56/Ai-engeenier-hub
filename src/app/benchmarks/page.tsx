@@ -1,48 +1,21 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BarChart3, CheckCircle2, ExternalLink, TriangleAlert } from "lucide-react";
+import { BarChart3, CheckCircle2, ExternalLink } from "lucide-react";
 import { CostCalculator } from "@/components/cost-calculator";
+import { ModelArena } from "@/components/model-arena";
+import { BenchmarkExplorer } from "@/components/benchmark-explorer";
+import { PRICES_CHECKED } from "@/lib/model-prices";
 
 export const metadata: Metadata = {
-  title: "LLM Benchmarks: How to Compare Models",
+  title: "LLM Benchmarks & Model Arena: compare models, speed and cost",
   description:
-    "What MMLU-Pro, GPQA, SWE-bench and LMArena actually measure, where to find live, up-to-date numbers, what benchmarks miss, and a cost calculator for choosing a model.",
+    "Run a live blind test between open models, learn what 12 benchmarks (SWE-bench, GPQA, BFCL, RULER, MMMU…) really measure, and compare monthly API costs with verified prices.",
   alternates: { canonical: "/benchmarks" },
 };
 
-// No scores are hard-coded on purpose: model rankings change every few weeks,
-// so we explain the benchmarks and link to sources that keep numbers current.
-const BENCHMARKS = [
-  {
-    name: "MMLU-Pro",
-    measures: "Broad knowledge and reasoning across many subjects (10-option multiple choice).",
-    useFor: "A rough sense of general knowledge.",
-    caveat: "Top models score close together, so small differences mean little.",
-    source: { label: "Paper (arXiv:2406.01574)", href: "https://arxiv.org/abs/2406.01574" },
-  },
-  {
-    name: "GPQA Diamond",
-    measures: "Very hard, expert-written science questions designed to resist web searching.",
-    useFor: "Comparing deep reasoning of frontier models.",
-    caveat: "Small question set; science-heavy, not typical app tasks.",
-    source: { label: "Paper (arXiv:2311.12022)", href: "https://arxiv.org/abs/2311.12022" },
-  },
-  {
-    name: "SWE-bench (Verified)",
-    measures: "Whether a model/agent can fix real GitHub issues so the project's tests pass.",
-    useFor: "Coding assistants and software agents.",
-    caveat: "Results depend heavily on the agent scaffold, not just the model.",
-    source: { label: "swebench.com", href: "https://www.swebench.com/" },
-  },
-  {
-    name: "LMArena",
-    measures: "Human preference: people compare two anonymous answers and vote.",
-    useFor: "How pleasant and helpful a chat model feels overall.",
-    caveat: "Rewards style and length; not a test of your specific task.",
-    source: { label: "lmarena.ai", href: "https://lmarena.ai/" },
-  },
-];
-
+// No leaderboard scores are hard-coded on purpose: rankings change every few weeks.
+// Benchmarks are explained in <BenchmarkExplorer/>; live numbers come from LIVE_SOURCES
+// and from the Arena, which measures real requests.
 const LIVE_SOURCES = [
   { name: "Artificial Analysis", what: "Independent quality index, speed (tokens/s, time to first token) and price per provider.", href: "https://artificialanalysis.ai/" },
   { name: "LMArena", what: "Live human-preference leaderboard for chat, coding and vision.", href: "https://lmarena.ai/" },
@@ -67,38 +40,29 @@ export default function BenchmarksPage() {
       <section className="bg-landing px-4 py-14">
         <div className="mx-auto max-w-4xl">
           <div className="inline-flex items-center gap-2 rounded-full bg-background/80 px-3 py-1 text-xs font-medium text-primary ring-1 ring-primary/15 mb-4">
-            <BarChart3 className="size-3.5" /> Guide · updated November 2026
+            <BarChart3 className="size-3.5" /> Benchmarks · prices checked {PRICES_CHECKED}
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-3">LLM Benchmarks: How to Compare Models</h1>
+          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight mb-3">Compare models the right way</h1>
           <p className="max-w-2xl text-muted-foreground">
-            Model rankings change every few weeks, so instead of a table that goes stale, this page explains what the
-            major benchmarks really measure, links to sources that keep numbers current, and gives you a checklist and
-            calculator to choose a model for your own app.
+            Test models live on your own prompt, understand what each benchmark really measures, and work out what a
+            model will cost for your traffic — without leaderboard tables that go stale in a month.
           </p>
         </div>
       </section>
 
       <div className="mx-auto max-w-4xl space-y-14 px-4 py-12">
         <section>
-          <h2 className="mb-4 text-2xl font-bold">What the main benchmarks measure</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {BENCHMARKS.map((b) => (
-              <div key={b.name} className="rounded-2xl border border-border bg-card p-5">
-                <h3 className="mb-2 text-lg font-semibold">{b.name}</h3>
-                <p className="mb-2 text-sm">{b.measures}</p>
-                <p className="mb-2 text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">Useful for: </span>
-                  {b.useFor}
-                </p>
-                <p className="mb-3 flex gap-1.5 text-sm text-amber-700 dark:text-amber-400">
-                  <TriangleAlert className="mt-0.5 size-4 shrink-0" /> {b.caveat}
-                </p>
-                <a href={b.source.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                  {b.source.label} <ExternalLink className="size-3" />
-                </a>
-              </div>
-            ))}
-          </div>
+          <h2 className="mb-2 text-2xl font-bold">Live Model Arena</h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Send the same prompt to two models at once, see real latency and speed, and vote blind — the same idea
+            LMArena uses, on your own question.
+          </p>
+          <ModelArena />
+        </section>
+
+        <section>
+          <h2 className="mb-4 text-2xl font-bold">What the benchmarks measure</h2>
+          <BenchmarkExplorer />
         </section>
 
         <section>
@@ -158,7 +122,8 @@ export default function BenchmarksPage() {
         <section>
           <h2 className="mb-2 text-2xl font-bold">Cost calculator</h2>
           <p className="mb-4 text-sm text-muted-foreground">
-            Compare two models for your traffic. Paste prices from each provider&apos;s pricing page.
+            Pick a workload and up to three models to see what they would cost per month, using each provider&apos;s
+            published prices.
           </p>
           <CostCalculator />
         </section>
