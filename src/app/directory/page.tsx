@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { LayoutGrid } from "lucide-react";
 import { aiTools, TOOL_CATEGORIES } from "@/lib/ai-tools";
+import { PRICING_CHECKED, TOOL_PRICING } from "@/lib/ai-tools-pricing";
 import { getAllDocs } from "@/lib/mdx";
 import { ToolsDirectory } from "@/components/tools-directory";
 import { Cube, Ring, Sphere } from "@/components/shapes-3d";
@@ -15,6 +16,7 @@ export const metadata: Metadata = {
 export default function DirectoryPage() {
   const lessonTitles = Object.fromEntries(getAllDocs().map((d) => [`${d.category}/${d.slug}`, d.title]));
   const openSource = aiTools.filter((t) => t.openSource).length;
+  const freeToStart = aiTools.filter((t) => !TOOL_PRICING[t.slug]?.free.startsWith("No free")).length;
 
   return (
     <div className="flex-1 pb-24">
@@ -36,6 +38,7 @@ export default function DirectoryPage() {
               [aiTools.length, "tools"],
               [TOOL_CATEGORIES.length, "categories"],
               [openSource, "open source"],
+              [freeToStart, "free to start"],
             ].map(([v, l]) => (
               <div key={String(l)}>
                 <p className="text-2xl font-bold">{v}</p>
@@ -48,8 +51,9 @@ export default function DirectoryPage() {
       <div className="mx-auto max-w-6xl px-4 py-10">
         <ToolsDirectory lessonTitles={lessonTitles} />
         <p className="mt-10 text-xs text-muted-foreground">
-          Independent listing — no sponsored placements. Pricing models change; check each vendor&apos;s site for current
-          details.
+          Independent listing — no sponsored placements. Free tiers and prices were checked on each official pricing page
+          or GitHub repo in {PRICING_CHECKED} and change often, so use the &quot;verify&quot; link before you decide. Logos
+          are trademarks of their owners, shown only to identify each tool.
         </p>
       </div>
     </div>

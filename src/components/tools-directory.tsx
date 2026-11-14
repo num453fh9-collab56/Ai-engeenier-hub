@@ -1,32 +1,29 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
-import { Check, ExternalLink, GitCompare, Search, SlidersHorizontal, X } from "lucide-react";
+import { BadgeDollarSign, Check, ExternalLink, Gift, GitCompare, Scale, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import { aiTools, TOOL_CATEGORIES, type AiTool, type Pricing } from "@/lib/ai-tools";
+import { PRICING_CHECKED, TOOL_PRICING } from "@/lib/ai-tools-pricing";
 
 const PRICING: Pricing[] = ["Open source", "Free tier", "Paid"];
-const HUES = [215, 250, 190, 160, 280, 20, 330];
-const hue = (s: string) => HUES[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % HUES.length];
-
-function Monogram({ tool, size = 56 }: { tool: AiTool; size?: number }) {
-  const h = hue(tool.name);
-  const letters = tool.name.replace(/[^A-Za-z0-9 ]/g, "").split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("");
+/** The tool's real logo on a white tile (so dark logos stay visible in dark mode). */
+function Logo({ tool, size = 56 }: { tool: AiTool; size?: number }) {
   return (
     <span
-      aria-hidden
-      className="flex shrink-0 items-center justify-center rounded-xl font-bold text-white shadow-md"
-      style={{
-        width: size,
-        height: size,
-        fontSize: size * 0.36,
-        background: `linear-gradient(135deg, hsl(${h} 85% 60%), hsl(${h + 25} 75% 42%))`,
-      }}
+      className="flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-black/5"
+      style={{ width: size, height: size, padding: size * 0.12 }}
     >
-      {letters.toUpperCase()}
+      <Image src={`/images/tools/${tool.slug}.png`} alt={`${tool.name} logo`} width={size} height={size} className="h-full w-full object-contain" />
     </span>
   );
 }
+
+const starsNum = (t: AiTool) => {
+  const s = TOOL_PRICING[t.slug]?.stars;
+  return s ? parseFloat(s) * (s.endsWith("k") ? 1000 : 1) : 0;
+};
 
 const pricingStyle: Record<Pricing, string> = {
   "Open source": "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
@@ -39,7 +36,7 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
   const [cat, setCat] = useState<string>("All");
   const [pricing, setPricing] = useState<Pricing[]>([]);
   const [selfHost, setSelfHost] = useState(false);
-  const [sort, setSort] = useState<"az" | "category">("category");
+  const [sort, setSort] = useState<"az" | "category" | "stars">("category");
   const [compare, setCompare] = useState<string[]>([]);
   const [showCompare, setShowCompare] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -98,7 +95,9 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
           [t.name, t.tagline, t.description, t.category, t.bestFor, ...t.languages].join(" ").toLowerCase().includes(s)
       )
       .sort((a, b) =>
-        sort === "az"
+        sort === "stars"
+          ? starsNum(b) - starsNum(a)
+          : sort === "az"
           ? a.name.localeCompare(b.name)
           : TOOL_CATEGORIES.indexOf(a.category as never) - TOOL_CATEGORIES.indexOf(b.category as never) ||
             a.name.localeCompare(b.name)
@@ -180,12 +179,13 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
             </button>
             <select
               value={sort}
-              onChange={(e) => setSort(e.target.value as "az" | "category")}
+              onChange={(e) => setSort(e.target.value as "az" | "category" | "stars")}
               aria-label="Sort"
               className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
             >
               <option value="category">Sort: Category</option>
               <option value="az">Sort: A–Z</option>
+              <option value="stars">Sort: GitHub stars</option>
             </select>
           </div>
         </div>
@@ -202,7 +202,7 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
             return (
               <li key={t.slug} className={`rounded-2xl border bg-card p-4 sm:p-5 transition-colors ${picked ? "border-primary/60" : "border-border"}`}>
                 <div className="flex gap-4">
-                  <Monogram tool={t} />
+                  <Logo tool={t} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
@@ -216,6 +216,7 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
                       <span className="font-medium">Best for: </span>
                       <span className="text-muted-foreground">{t.bestFor}</span>
                     </p>
+                    {TOOL_PRICING[t.slug] && <PricingBox slug={t.slug} />}
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       <span className="rounded-md bg-muted px-2 py-0.5 text-xs">{t.category}</span>
                       {t.deploy.map((d) => (
@@ -278,7 +279,7 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
             <div className="flex flex-1 items-center gap-2 overflow-x-auto">
               {compared.map((t) => (
                 <span key={t.slug} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-muted py-1 pl-1 pr-2 text-sm">
-                  <Monogram tool={t} size={24} />
+                  <Logo tool={t} size={24} />
                   {t.name}
                   <button onClick={() => toggleCompare(t.slug)} aria-label={`Remove ${t.name}`}>
                     <X className="size-3.5" />
@@ -321,7 +322,7 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
                     <th className="w-32" />
                     {compared.map((t) => (
                       <th key={t.slug} className="p-3 text-left align-bottom">
-                        <Monogram tool={t} size={40} />
+                        <Logo tool={t} size={40} />
                         <p className="mt-2 font-semibold">{t.name}</p>
                       </th>
                     ))}
@@ -332,6 +333,10 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
                     [
                       ["Category", (t: AiTool) => t.category],
                       ["Pricing", (t: AiTool) => t.pricing],
+                      ["Free tier", (t: AiTool) => TOOL_PRICING[t.slug]?.free ?? "—"],
+                      ["Paid", (t: AiTool) => TOOL_PRICING[t.slug]?.paid ?? "Free"],
+                      ["License", (t: AiTool) => TOOL_PRICING[t.slug]?.license ?? "Proprietary"],
+                      ["GitHub stars", (t: AiTool) => TOOL_PRICING[t.slug]?.stars ?? "—"],
                       ["Open source", (t: AiTool) => (t.openSource ? "Yes" : "No")],
                       ["Deployment", (t: AiTool) => t.deploy.join(", ")],
                       ["Languages", (t: AiTool) => t.languages.join(", ")],
@@ -352,6 +357,46 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** What you get for free, where paid starts, license and popularity — with a link to verify. */
+function PricingBox({ slug }: { slug: string }) {
+  const p = TOOL_PRICING[slug];
+  return (
+    <div className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-3 text-sm">
+      <p className="flex gap-2">
+        <Gift className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+        <span>
+          <span className="font-semibold text-emerald-700 dark:text-emerald-400">Free: </span>
+          {p.free}
+        </span>
+      </p>
+      {p.paid && (
+        <p className="mt-1.5 flex gap-2">
+          <BadgeDollarSign className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span>
+            <span className="font-semibold">Paid: </span>
+            <span className="text-muted-foreground">{p.paid}</span>
+          </span>
+        </p>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {p.license && (
+          <span className="inline-flex items-center gap-1">
+            <Scale className="size-3.5" /> {p.license}
+          </span>
+        )}
+        {p.stars && (
+          <span className="inline-flex items-center gap-1">
+            <Star className="size-3.5 fill-amber-400 text-amber-400" /> {p.stars} GitHub stars
+          </span>
+        )}
+        <a href={p.pricingUrl} target="_blank" rel="noopener noreferrer" className="ml-auto inline-flex items-center gap-1 text-primary hover:underline">
+          Checked {PRICING_CHECKED} · verify <ExternalLink className="size-3" />
+        </a>
+      </div>
     </div>
   );
 }

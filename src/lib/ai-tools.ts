@@ -237,7 +237,7 @@ export const aiTools: AiTool[] = [
     slug: "phoenix", name: "Arize Phoenix", category: "Evaluation & Observability",
     tagline: "Open-source AI observability",
     description: "Notebook-friendly tracing and evaluation built on OpenTelemetry, for RAG and agent debugging.",
-    pricing: "Open source", openSource: true, deploy: ["Local", "Self-host", "Cloud"], languages: ["Python", "TypeScript"],
+    pricing: "Free tier", openSource: false, deploy: ["Local", "Self-host", "Cloud"], languages: ["Python", "TypeScript"],
     bestFor: "OpenTelemetry-based tracing", url: "https://phoenix.arize.com/",
   },
   // Fine-tuning
