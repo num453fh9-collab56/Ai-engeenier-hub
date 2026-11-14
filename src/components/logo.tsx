@@ -33,7 +33,7 @@ const NODES: [number, number][] = [
 
 function Monogram({ id }: { id: string }) {
   return (
-    <>
+    <g>
       <defs>
         <linearGradient id={`${id}-face`} x1="0" y1="8" x2="0" y2="92" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="#22c55e" />
@@ -74,7 +74,7 @@ function Monogram({ id }: { id: string }) {
           ))}
         </g>
       </g>
-    </>
+    </g>
   );
 }
 
@@ -106,7 +106,8 @@ export function LogoMark({
 
   return (
     <svg width={size * 2.56} height={size} viewBox="-14 -2 256 100" fill="none" role="img" aria-label="AI Engineering Hub logo" className={className}>
-      <Monogram id="aeh" />
+      {/* called as a function (not <Monogram/>): OG image renderer only allows plain SVG tags inside <svg> */}
+      {Monogram({ id: "aeh" })}
     </svg>
   );
 }
