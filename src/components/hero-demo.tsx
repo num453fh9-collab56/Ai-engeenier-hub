@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowUp, Code2, Loader2, MessageSquare } from "lucide-react";
+import { ArrowUp, Check, Code2, Copy, Loader2, MessageSquare } from "lucide-react";
 import { MubeenAvatar } from "@/components/mubeen-avatar";
 
 const suggestions = [
@@ -26,15 +26,10 @@ const SNIPPETS = {
     lesson: "/docs/02-rag/vector-dbs",
     code: `# RAG: retrieve first, then generate
 hits = vector_db.query(embed(question), top_k=3)
-context = "
-
-".join(h.text for h in hits)
+context = "\\n\\n".join(h.text for h in hits)
 
 answer = llm(
-    f"Answer only from this context:
-{context}
-
-Q: {question}"
+    f"Answer only from this context:\\n{context}\\n\\nQ: {question}"
 )`,
   },
   finetune: {
@@ -122,6 +117,8 @@ export function HeroDemo({ embedded = false }: { embedded?: boolean }) {
     setLoading(false);
     setAnswer(reply);
   }
+
+  if (embedded) return <EmbeddedDemo {...{ input, setInput, question, answer, shown, loading, tab, setTab, ask }} />;
 
   return (
     <div className={embedded ? "relative w-full" : "relative w-full max-w-md mx-auto animate-fade-up [animation-delay:200ms]"}>
@@ -238,6 +235,150 @@ export function HeroDemo({ embedded = false }: { embedded?: boolean }) {
             <ArrowUp className="size-4" />
           </button>
         </form>
+      </div>
+    </div>
+  );
+}
+
+/** Homepage version: a browser-style window — questions on the left, Mubeen's response / code on the right. */
+function EmbeddedDemo({
+  input, setInput, question, answer, shown, loading, tab, setTab, ask,
+}: {
+  input: string;
+  setInput: (v: string) => void;
+  question: string | null;
+  answer: string;
+  shown: number;
+  loading: boolean;
+  tab: "answer" | "code";
+  setTab: (t: "answer" | "code") => void;
+  ask: (q: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const snippet = SNIPPETS[pickSnippet(question)];
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl shadow-primary/20">
+      {/* title bar */}
+      <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5">
+        <span className="size-2.5 rounded-full bg-red-400/80" />
+        <span className="size-2.5 rounded-full bg-amber-400/80" />
+        <span className="size-2.5 rounded-full bg-emerald-400/80" />
+        <span className="ml-2 font-mono text-xs text-muted-foreground">mubeen · your AI mentor</span>
+        <span className="ml-auto inline-flex items-center gap-1.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+          <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" /> live
+        </span>
+      </div>
+
+      <div className="grid sm:grid-cols-[1fr_1.15fr]">
+        {/* left: greeting, suggestions, input */}
+        <div className="flex flex-col gap-2 p-3">
+          <p className="text-sm">
+            Hi, I&apos;m Mubeen 👋 <span className="text-muted-foreground">Ask me anything about LLMs.</span>
+          </p>
+          {suggestions.map((s) => (
+            <button
+              key={s}
+              onClick={() => ask(s)}
+              className={`rounded-lg border px-3 py-1.5 text-left text-xs transition-colors ${
+                question === s
+                  ? "border-primary/50 bg-primary/10 text-primary"
+                  : "border-border/70 bg-background/60 hover:border-primary/40 hover:bg-primary/5"
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              ask(input);
+            }}
+            className="mt-auto flex items-center gap-1.5 rounded-lg border border-border/70 bg-background/60 p-1"
+          >
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Or type your own…"
+              maxLength={300}
+              className="min-w-0 flex-1 bg-transparent px-2 py-1 text-xs outline-none placeholder:text-muted-foreground"
+            />
+            <button
+              type="submit"
+              disabled={!input.trim() || loading}
+              aria-label="Ask"
+              className="inline-flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
+            >
+              <ArrowUp className="size-3.5" />
+            </button>
+          </form>
+        </div>
+
+        {/* right: response / code preview */}
+        <div className="m-2 ml-0 flex flex-col overflow-hidden rounded-xl border border-border/70 bg-muted/40 max-sm:ml-2">
+          <div role="tablist" className="flex gap-1 border-b border-border/60 px-1.5 pt-1.5">
+            {([
+              ["answer", "Mubeen's Response", MessageSquare],
+              ["code", "Code Preview", Code2],
+            ] as const).map(([key, label, Icon]) => (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={tab === key}
+                onClick={() => setTab(key)}
+                className={`inline-flex items-center gap-1.5 rounded-t-md border-b-2 px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                  tab === key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Icon className="size-3.5" /> {label}
+              </button>
+            ))}
+          </div>
+
+          {tab === "code" ? (
+            <div className="relative h-44 overflow-y-auto bg-[#0b1020] p-3">
+              <button
+                onClick={() => {
+                  navigator.clipboard?.writeText(snippet.code).then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                  });
+                }}
+                aria-label="Copy code"
+                className="absolute right-2 top-2 rounded-md p-1 text-sky-200/70 hover:bg-white/10 hover:text-white"
+              >
+                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+              </button>
+              <pre className="whitespace-pre-wrap pr-6 font-mono text-[11px] leading-relaxed text-sky-100">{snippet.code}</pre>
+              <Link href={snippet.lesson} className="mt-2 inline-block text-[11px] font-medium text-sky-300 hover:underline">
+                Learn this in the lesson &rarr;
+              </Link>
+            </div>
+          ) : (
+            <div className="h-44 space-y-2 overflow-y-auto p-3 text-xs">
+              {!question ? (
+                <p className="text-muted-foreground">Pick a question on the left — Mubeen answers here, live.</p>
+              ) : (
+                <>
+                  <p className="font-medium text-primary">{question}</p>
+                  <div className="flex gap-2">
+                    <MubeenAvatar size={20} className="mt-0.5 shrink-0" />
+                    <div className="whitespace-pre-wrap leading-relaxed">
+                      {loading ? (
+                        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <>
+                          {answer.slice(0, shown)}
+                          {shown < answer.length && <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-primary align-middle" />}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
