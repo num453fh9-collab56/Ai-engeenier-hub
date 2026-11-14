@@ -10,13 +10,14 @@ export interface TrackBook {
   quizQuestions: number;
 }
 
-// Each track gets its own cover colours
+// Rich, deep "hardcover" colours — one per track — with gold-foil details
 const COVERS = [
-  "from-indigo-500 via-blue-600 to-blue-800",
-  "from-violet-500 via-purple-600 to-fuchsia-800",
-  "from-rose-500 via-pink-600 to-rose-800",
-  "from-teal-400 via-cyan-600 to-sky-800",
+  "from-[#1e2a5a] via-[#16204a] to-[#0b1230]", // midnight navy
+  "from-[#4a1d5c] via-[#3a1548] to-[#220b2e]", // plum / aubergine
+  "from-[#6b1a2e] via-[#531324] to-[#300913]", // wine / burgundy
+  "from-[#0f4a43] via-[#0b3a35] to-[#05221f]", // deep emerald
 ];
+const GOLD = "#e8c77a";
 
 /** "Read offline" section: every track as a real-looking book with real numbers. */
 export function TrackBooks({ books }: { books: TrackBook[] }) {
@@ -48,21 +49,23 @@ export function TrackBooks({ books }: { books: TrackBook[] }) {
                   <div className={`relative h-full w-full overflow-hidden rounded-r-xl rounded-l-sm bg-gradient-to-br ${COVERS[i % COVERS.length]} p-4 text-white`}>
                     {/* spine */}
                     <div className="absolute inset-y-0 left-0 w-3 bg-black/25" />
-                    <div className="absolute inset-y-0 left-3 w-px bg-white/25" />
+                    <div className="absolute inset-y-0 left-3 w-px bg-white/15" />
+                    {/* thin gold frame */}
+                    <div className="pointer-events-none absolute inset-2.5 left-5 rounded-md border" style={{ borderColor: `${GOLD}55` }} />
                     {/* subtle circuit lines */}
-                    <svg className="absolute -right-6 -bottom-6 size-40 opacity-20" viewBox="0 0 100 100" fill="none" aria-hidden>
-                      <path d="M10 90 H40 V60 H70 V30 H95" stroke="white" strokeWidth="2" />
-                      <path d="M30 100 V75 H55 V45 H85" stroke="white" strokeWidth="2" />
-                      <circle cx="40" cy="60" r="3" fill="white" />
-                      <circle cx="70" cy="30" r="3" fill="white" />
-                      <circle cx="55" cy="45" r="3" fill="white" />
+                    <svg className="absolute -right-6 -bottom-6 size-40 opacity-30" viewBox="0 0 100 100" fill="none" aria-hidden>
+                      <path d="M10 90 H40 V60 H70 V30 H95" stroke={GOLD} strokeWidth="1.5" />
+                      <path d="M30 100 V75 H55 V45 H85" stroke={GOLD} strokeWidth="1.5" />
+                      <circle cx="40" cy="60" r="2.5" fill={GOLD} />
+                      <circle cx="70" cy="30" r="2.5" fill={GOLD} />
+                      <circle cx="55" cy="45" r="2.5" fill={GOLD} />
                     </svg>
                     <div className="relative flex h-full flex-col pl-3">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/75">AI Engineering Hub</span>
-                      <span className="mt-auto text-[10px] font-medium uppercase tracking-wider text-white/75">Track {i + 1}</span>
-                      <span className="text-xl font-extrabold leading-tight tracking-tight">{b.label}</span>
-                      <span className="mt-2 h-0.5 w-10 rounded-full bg-white/70" />
-                      <span className="mt-3 text-[11px] text-white/80">
+                      <span className="text-[9px] font-semibold uppercase tracking-[0.22em]" style={{ color: GOLD }}>AI Engineering Hub</span>
+                      <span className="mt-auto text-[10px] font-medium uppercase tracking-[0.18em] text-white/60">Track {i + 1}</span>
+                      <span className="font-serif text-xl font-semibold leading-tight text-[#f7f1e3]">{b.label}</span>
+                      <span className="mt-2 h-px w-12" style={{ background: GOLD }} />
+                      <span className="mt-3 text-[11px] text-white/60">
                         {b.lessons} lessons · {b.minutes} min
                       </span>
                     </div>
