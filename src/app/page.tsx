@@ -4,6 +4,8 @@ import { Newsletter } from "@/components/newsletter";
 import { CourseGrid } from "@/components/course-grid";
 import { getLessonCards } from "@/lib/lesson-cards";
 import { getLearningPath } from "@/lib/learning-path";
+import { quizzes } from "@/lib/quizzes";
+import { aiTools } from "@/lib/ai-tools";
 import { CurriculumRoadmap } from "@/components/curriculum-roadmap";
 import { LandingHero } from "@/components/landing-hero";
 import { CardCarousel } from "@/components/card-carousel";
@@ -42,7 +44,15 @@ export default function Home() {
 
   return (
     <div className="flex flex-col flex-1">
-      <LandingHero lessonCount={lessonCount} trackCount={trackCount} />
+      <LandingHero
+        lessonCount={lessonCount}
+        trackCount={trackCount}
+        stats={{
+          quizQuestions: Object.values(quizzes).reduce((n, q) => n + q.length, 0),
+          projects: getLessonCards().filter((l) => l.project).length,
+          tools: aiTools.length,
+        }}
+      />
 
       <CardCarousel
         title="Popular lessons"

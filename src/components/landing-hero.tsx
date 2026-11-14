@@ -1,9 +1,29 @@
 import Link from "next/link";
-import { ArrowRight, Flame, Sparkles, Trophy } from "lucide-react";
+import { ArrowRight, Bot, Boxes, Database, Flame, Link2, ListChecks, Server, Sparkles, Trophy, Zap } from "lucide-react";
+import { AgentWorkflow } from "@/components/agent-workflow";
 import { HeroDemo } from "@/components/hero-demo";
 import { Cube, Plus, Ring, Sphere } from "@/components/shapes-3d";
 
-export function LandingHero({ lessonCount, trackCount }: { lessonCount: number; trackCount: number }) {
+// Tools taught in the lessons (names only — no brand logos, no implied partnership)
+const TOOLS = [
+  { name: "OpenAI API", icon: Sparkles },
+  { name: "Claude", icon: Bot },
+  { name: "LangChain", icon: Link2 },
+  { name: "Pinecone", icon: Database },
+  { name: "Qdrant", icon: Boxes },
+  { name: "Groq", icon: Zap },
+  { name: "vLLM", icon: Server },
+];
+
+export function LandingHero({
+  lessonCount,
+  trackCount,
+  stats,
+}: {
+  lessonCount: number;
+  trackCount: number;
+  stats: { quizQuestions: number; projects: number; tools: number };
+}) {
   return (
     <section className="bg-landing relative overflow-hidden px-4 pt-14 pb-20 sm:pt-20 sm:pb-28">
       {/* floating 3D shapes */}
@@ -59,8 +79,10 @@ export function LandingHero({ lessonCount, trackCount }: { lessonCount: number; 
           </div>
         </div>
 
-        {/* Laptop mockup with the live AI demo on screen */}
-        <div className="relative mx-auto w-full max-w-xl animate-fade-up [animation-delay:150ms]">
+        {/* Right column: workflow visualizer, Mubeen on a laptop, tools, feature cards */}
+        <div className="relative mx-auto w-full max-w-xl space-y-5 animate-fade-up [animation-delay:150ms]">
+          <AgentWorkflow />
+
           <div className="laptop-tilt">
             <div className="rounded-t-2xl border-[10px] border-b-[14px] border-zinc-800 bg-zinc-800 shadow-2xl shadow-primary/25 dark:border-zinc-700 dark:bg-zinc-700">
               <div className="overflow-hidden rounded-md">
@@ -72,26 +94,50 @@ export function LandingHero({ lessonCount, trackCount }: { lessonCount: number; 
             </div>
           </div>
 
-          {/* floating stat cards */}
-          <div className="shape-float absolute -left-4 sm:-left-10 -bottom-8 hidden sm:flex items-center gap-2 rounded-xl bg-background/90 px-3 py-2 shadow-xl ring-1 ring-border backdrop-blur">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-amber-500/15 text-amber-500">
-              <Flame className="size-4" />
-            </span>
-            <div className="text-xs">
-              <p className="font-semibold">Daily streaks</p>
-              <p className="text-muted-foreground">Keep learning</p>
+          {/* Tools strip */}
+          <div className="rounded-2xl bg-gradient-to-r from-primary/30 via-cyan-400/30 to-primary/30 p-px shadow-lg shadow-primary/10">
+            <div className="rounded-2xl bg-background/85 px-4 py-3 backdrop-blur-md">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tools you&apos;ll learn</p>
+              <ul className="flex flex-wrap gap-x-4 gap-y-2">
+                {TOOLS.map((t) => (
+                  <li key={t.name} className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                    <t.icon className="size-4 text-primary" /> {t.name}
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
-          <div
-            className="shape-float absolute -right-2 sm:-right-6 -top-6 hidden sm:flex items-center gap-2 rounded-xl bg-background/90 px-3 py-2 shadow-xl ring-1 ring-border backdrop-blur"
-            style={{ animationDelay: "1.2s" }}
-          >
-            <span className="flex size-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
-              <Trophy className="size-4" />
-            </span>
-            <div className="text-xs">
-              <p className="font-semibold">Certificates</p>
-              <p className="text-muted-foreground">Per track</p>
+
+          {/* Feature cards — real numbers only */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="flex items-center gap-3 rounded-2xl bg-background/85 p-3 shadow-md ring-1 ring-border backdrop-blur">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                <Trophy className="size-4" />
+              </span>
+              <span className="text-xs leading-tight">
+                <span className="block text-sm font-semibold">Certificates</span>
+                <span className="text-muted-foreground">Per track · free</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-3 rounded-2xl bg-background/85 p-3 shadow-md ring-1 ring-border backdrop-blur">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500">
+                <Flame className="size-4" />
+              </span>
+              <span className="text-xs leading-tight">
+                <span className="block text-sm font-semibold">Daily streaks</span>
+                <span className="text-muted-foreground">Mubeen reminds you</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-3 rounded-2xl bg-background/85 p-3 shadow-md ring-1 ring-border backdrop-blur">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                <ListChecks className="size-4" />
+              </span>
+              <span className="text-xs leading-tight">
+                <span className="block text-sm font-semibold">{stats.quizQuestions} quiz questions</span>
+                <span className="text-muted-foreground">
+                  {stats.projects} projects · {stats.tools} tools
+                </span>
+              </span>
             </div>
           </div>
         </div>

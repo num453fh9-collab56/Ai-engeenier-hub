@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { ArrowUp, Code2, Loader2, MessageSquare } from "lucide-react";
 import { MubeenAvatar } from "@/components/mubeen-avatar";
 
 const suggestions = [
@@ -19,12 +20,62 @@ const fallback: Record<string, string> = {
     "The model is given tool schemas. It decides to call one, your code executes it, and the result is fed back. This loop (reason → act → observe) repeats until the task is done — the ReAct pattern.",
 };
 
+// Simplified code that matches each topic, shown in the "Code" tab
+const SNIPPETS = {
+  rag: {
+    lesson: "/docs/02-rag/vector-dbs",
+    code: `# RAG: retrieve first, then generate
+hits = vector_db.query(embed(question), top_k=3)
+context = "
+
+".join(h.text for h in hits)
+
+answer = llm(
+    f"Answer only from this context:
+{context}
+
+Q: {question}"
+)`,
+  },
+  finetune: {
+    lesson: "/docs/04-finetuning/fine-tuning",
+    code: `# Fine-tune a small model with LoRA (TRL + PEFT)
+from peft import LoraConfig
+from trl import SFTTrainer
+
+trainer = SFTTrainer(
+    model="Qwen/Qwen3-0.6B",
+    train_dataset=dataset,
+    peft_config=LoraConfig(r=16, target_modules="all-linear"),
+)
+trainer.train()`,
+  },
+  agent: {
+    lesson: "/docs/03-agents/react-pattern",
+    code: `# The agent loop: reason -> act -> observe
+for step in range(max_steps):
+    reply = llm(history, tools=TOOLS)
+    if not reply.tool_calls:
+        break                       # final answer
+    for call in reply.tool_calls:   # run the tool...
+        history.append(run_tool(call))  # ...and observe`,
+  },
+};
+type SnippetKey = keyof typeof SNIPPETS;
+const pickSnippet = (q: string | null): SnippetKey => {
+  const t = (q ?? "").toLowerCase();
+  if (/fine|lora|train/.test(t)) return "finetune";
+  if (/agent|tool/.test(t)) return "agent";
+  return "rag";
+};
+
 export function HeroDemo({ embedded = false }: { embedded?: boolean }) {
   const [input, setInput] = useState("");
   const [question, setQuestion] = useState<string | null>(null);
   const [answer, setAnswer] = useState("");
   const [shown, setShown] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<"answer" | "code">("answer");
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Typewriter effect for the answer
@@ -49,6 +100,7 @@ export function HeroDemo({ embedded = false }: { embedded?: boolean }) {
     const text = q.trim();
     if (!text || loading) return;
     setQuestion(text);
+    setTab("answer");
     setAnswer("");
     setShown(0);
     setInput("");
@@ -90,6 +142,35 @@ export function HeroDemo({ embedded = false }: { embedded?: boolean }) {
           </span>
         </div>
 
+        <div role="tablist" className="flex gap-1 border-b border-border/60 bg-muted/40 px-2 pt-1.5">
+          {([
+            ["answer", "Mubeen's answer", MessageSquare],
+            ["code", "Code", Code2],
+          ] as const).map(([key, label, Icon]) => (
+            <button
+              key={key}
+              role="tab"
+              aria-selected={tab === key}
+              onClick={() => setTab(key)}
+              className={`inline-flex items-center gap-1.5 rounded-t-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                tab === key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon className="size-3.5" /> {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "code" ? (
+          <div className={`${embedded ? "h-56 sm:h-60" : "h-64"} overflow-y-auto bg-[#0b1020] p-4`}>
+            <pre className="whitespace-pre-wrap font-mono text-[11.5px] leading-relaxed text-sky-100">
+              {SNIPPETS[pickSnippet(question)].code}
+            </pre>
+            <Link href={SNIPPETS[pickSnippet(question)].lesson} className="mt-3 inline-block text-xs font-medium text-violet-300 hover:underline">
+              Learn this step by step in the lesson &rarr;
+            </Link>
+          </div>
+        ) : (
         <div className={`${embedded ? "h-56 sm:h-60" : "h-64"} overflow-y-auto p-4 text-sm space-y-3`}>
           {!question && (
             <div className="text-muted-foreground">
@@ -132,6 +213,7 @@ export function HeroDemo({ embedded = false }: { embedded?: boolean }) {
             </>
           )}
         </div>
+        )}
 
         <form
           onSubmit={(e) => {
