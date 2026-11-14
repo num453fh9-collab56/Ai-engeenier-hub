@@ -42,7 +42,7 @@ export const PATH: PhaseDef[] = [
       { lesson: "02-rag/vector-dbs" },
       { lesson: "02-rag/hybrid-search" },
       { lesson: "02-rag/rag-eval" },
-      { planned: "Chunking and document ingestion" },
+      { lesson: "02-rag/chunking" },
       { planned: "Build a complete RAG app end to end" },
     ],
   },

@@ -349,6 +349,63 @@ export const quizzes: Record<string, QuizQuestion[]> = {
       why: "pgvector keeps vectors next to your data with no new infrastructure; move to a dedicated DB if scale or filtering demands it.",
     },
   ],
+  "02-rag/chunking": [
+    {
+      q: "Why does chunking quality cap RAG quality?",
+      options: [
+        "Because the LLM reads every document anyway",
+        "Because the retriever searches chunks, not whole documents",
+        "Because chunks decide which LLM is used",
+        "It doesn't — only the embedding model matters",
+      ],
+      answer: 1,
+      why: "If the right text isn't in a well-formed chunk, the retriever can't find it and the LLM can't use it.",
+    },
+    {
+      q: "In the lesson's evaluation, 512-token plain chunks hit 100% while sections hit 92%. Why isn't 512 simply better?",
+      options: [
+        "It sends about 5× more tokens per question (608 vs 124), costing more and adding distracting text",
+        "512-token chunks can't be embedded",
+        "BM25 doesn't work on big chunks",
+        "It is better — always use the biggest chunks",
+      ],
+      answer: 0,
+      why: "Big chunks 'contain' answers by containing everything. Track context tokens next to hit rate.",
+    },
+    {
+      q: "What does a recursive splitter do?",
+      options: [
+        "Cuts every N characters",
+        "Asks an LLM where to split",
+        "Splits on paragraphs first, then lines, sentences and words — only as far as needed",
+        "Splits each word into its own chunk",
+      ],
+      answer: 2,
+      why: "It keeps natural boundaries whenever possible and only goes finer for pieces that are still too long.",
+    },
+    {
+      q: "Why give chunks stable IDs (e.g. a hash of source + page + section + position)?",
+      options: [
+        "They make embeddings more accurate",
+        "Re-ingesting a document updates its chunks instead of creating duplicates",
+        "They hide the source from users",
+        "Vector databases require hashes",
+      ],
+      answer: 1,
+      why: "Same input → same ID, so updates replace old chunks cleanly.",
+    },
+    {
+      q: "Both strategies missed 'How long do I have to get my money back?' (the text says 'refund'). What fixes it?",
+      options: [
+        "Smaller chunks",
+        "More overlap",
+        "Embeddings / hybrid search, which match meaning rather than exact words",
+        "Removing the PDF headers",
+      ],
+      answer: 2,
+      why: "It's a vocabulary mismatch. No chunk size can make keyword search match words that aren't there.",
+    },
+  ],
   "03-agents/react-pattern": [
     {
       q: "What is the core loop of a ReAct agent?",
