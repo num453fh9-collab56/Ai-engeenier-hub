@@ -35,6 +35,19 @@ export function AiAssistant() {
     }
   }, [open]);
 
+  // Other parts of the site can open Mubeen with a question pre-filled
+  // (e.g. "Ask Mubeen about Pinecone" in the tools directory).
+  useEffect(() => {
+    const onAsk = (e: Event) => {
+      const q = (e as CustomEvent<{ question?: string }>).detail?.question;
+      if (!q) return;
+      setInput(q);
+      setOpen(true);
+    };
+    window.addEventListener("ask-mubeen", onAsk);
+    return () => window.removeEventListener("ask-mubeen", onAsk);
+  }, []);
+
   useEffect(() => {
     if (listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight;

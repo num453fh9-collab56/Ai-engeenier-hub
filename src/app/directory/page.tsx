@@ -4,6 +4,7 @@ import { aiTools, TOOL_CATEGORIES } from "@/lib/ai-tools";
 import { PRICING_CHECKED, TOOL_PRICING } from "@/lib/ai-tools-pricing";
 import { getAllDocs } from "@/lib/mdx";
 import { ToolsDirectory } from "@/components/tools-directory";
+import { StackBuilder } from "@/components/stack-builder";
 import { Cube, Ring, Sphere } from "@/components/shapes-3d";
 
 export const metadata: Metadata = {
@@ -49,6 +50,7 @@ export default function DirectoryPage() {
         </div>
       </section>
       <div className="mx-auto max-w-6xl px-4 py-10">
+        <StackBuilder />
         <ToolsDirectory lessonTitles={lessonTitles} />
         <p className="mt-10 text-xs text-muted-foreground">
           Independent listing — no sponsored placements. Free tiers and prices were checked on each official pricing page

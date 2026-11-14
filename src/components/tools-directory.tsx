@@ -1,24 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
-import { BadgeDollarSign, Check, ExternalLink, Gift, GitCompare, Scale, Search, SlidersHorizontal, Star, X } from "lucide-react";
+import { BadgeDollarSign, Check, ExternalLink, Gift, GitCompare, Link2, Scale, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import { aiTools, TOOL_CATEGORIES, type AiTool, type Pricing } from "@/lib/ai-tools";
 import { PRICING_CHECKED, TOOL_PRICING } from "@/lib/ai-tools-pricing";
+import { useMyStack } from "@/lib/my-stack";
+import { ToolLogo } from "@/components/tool-logo";
+import { ToolActions } from "@/components/tool-actions";
 
 const PRICING: Pricing[] = ["Open source", "Free tier", "Paid"];
-/** The tool's real logo on a white tile (so dark logos stay visible in dark mode). */
 function Logo({ tool, size = 56 }: { tool: AiTool; size?: number }) {
-  return (
-    <span
-      className="flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-black/5"
-      style={{ width: size, height: size, padding: size * 0.12 }}
-    >
-      <Image src={`/images/tools/${tool.slug}.png`} alt={`${tool.name} logo`} width={size} height={size} className="h-full w-full object-contain" />
-    </span>
-  );
+  return <ToolLogo slug={tool.slug} name={tool.name} size={size} />;
 }
+
+const freeToStart = (t: AiTool) => !TOOL_PRICING[t.slug]?.free.startsWith("No free");
 
 const starsNum = (t: AiTool) => {
   const s = TOOL_PRICING[t.slug]?.stars;
@@ -36,6 +32,10 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
   const [cat, setCat] = useState<string>("All");
   const [pricing, setPricing] = useState<Pricing[]>([]);
   const [selfHost, setSelfHost] = useState(false);
+  const [freeOnly, setFreeOnly] = useState(false);
+  const [savedOnly, setSavedOnly] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const myStack = useMyStack();
   const [sort, setSort] = useState<"az" | "category" | "stars">("category");
   const [compare, setCompare] = useState<string[]>([]);
   const [showCompare, setShowCompare] = useState(false);
@@ -77,6 +77,30 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
   }, [showCompare]);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
+  // Shareable URLs: read filters from ?q=&cat=&compare= once, then keep the URL in sync.
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("q")) setQ(sp.get("q")!);
+    const c = sp.get("cat");
+    if (c && (TOOL_CATEGORIES as readonly string[]).includes(c)) setCat(c);
+    const cmp = (sp.get("compare") ?? "").split(",").filter((x) => aiTools.some((t) => t.slug === x)).slice(0, 3);
+    if (cmp.length) {
+      setCompare(cmp);
+      if (cmp.length > 1) setShowCompare(true);
+    }
+    setReady(true);
+  }, []);
+  useEffect(() => {
+    if (!ready) return;
+    const sp = new URLSearchParams();
+    if (q.trim()) sp.set("q", q.trim());
+    if (cat !== "All") sp.set("cat", cat);
+    if (compare.length) sp.set("compare", compare.join(","));
+    const qs = sp.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  }, [ready, q, cat, compare]);
+
   const counts = useMemo(() => {
     const c: Record<string, number> = { All: aiTools.length };
     for (const t of aiTools) c[t.category] = (c[t.category] ?? 0) + 1;
@@ -89,6 +113,8 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
       .filter((t) => cat === "All" || t.category === cat)
       .filter((t) => !pricing.length || pricing.includes(t.pricing))
       .filter((t) => !selfHost || t.deploy.some((d) => d !== "Cloud"))
+      .filter((t) => !freeOnly || freeToStart(t))
+      .filter((t) => !savedOnly || myStack.includes(t.slug))
       .filter(
         (t) =>
           !s ||
@@ -102,7 +128,7 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
           : TOOL_CATEGORIES.indexOf(a.category as never) - TOOL_CATEGORIES.indexOf(b.category as never) ||
             a.name.localeCompare(b.name)
       );
-  }, [q, cat, pricing, selfHost, sort]);
+  }, [q, cat, pricing, selfHost, freeOnly, savedOnly, myStack, sort]);
 
   const toggleCompare = (slug: string) =>
     setCompare((c) => (c.includes(slug) ? c.filter((x) => x !== slug) : c.length >= 3 ? c : [...c, slug]));
@@ -147,6 +173,17 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
         <label className="flex cursor-pointer items-center gap-2 py-1 text-sm">
           <input type="checkbox" checked={selfHost} onChange={() => setSelfHost((v) => !v)} className="size-4 accent-[var(--primary)]" />
           Can run locally / self-host
+        </label>
+        <label className="flex cursor-pointer items-center gap-2 py-1 text-sm">
+          <input type="checkbox" checked={freeOnly} onChange={() => setFreeOnly((v) => !v)} className="size-4 accent-[var(--primary)]" />
+          Free to start
+        </label>
+      </div>
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">My stack</p>
+        <label className="flex cursor-pointer items-center gap-2 py-1 text-sm">
+          <input type="checkbox" checked={savedOnly} onChange={() => setSavedOnly((v) => !v)} className="size-4 accent-[var(--primary)]" />
+          Show only saved ({myStack.length})
         </label>
       </div>
     </div>
@@ -206,7 +243,9 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <h3 className="text-lg font-semibold leading-tight">{t.name}</h3>
+                        <h3 className="text-lg font-semibold leading-tight">
+                          <Link href={`/directory/${t.slug}`} className="hover:text-primary hover:underline">{t.name}</Link>
+                        </h3>
                         <p className="text-sm text-muted-foreground">{t.tagline}</p>
                       </div>
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${pricingStyle[t.pricing]}`}>{t.pricing}</span>
@@ -242,6 +281,10 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
                   </div>
                 </div>
                 <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
+                  <ToolActions slug={t.slug} name={t.name} compact />
+                  <Link href={`/directory/${t.slug}`} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:bg-accent">
+                    Details
+                  </Link>
                   <button
                     onClick={() => toggleCompare(t.slug)}
                     disabled={!picked && compare.length >= 3}
@@ -311,9 +354,22 @@ export function ToolsDirectory({ lessonTitles }: { lessonTitles: Record<string, 
           >
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold">Side-by-side comparison</h2>
-              <button onClick={() => setShowCompare(false)} aria-label="Close">
-                <X className="size-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    navigator.clipboard?.writeText(window.location.href).then(() => {
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 1500);
+                    });
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-accent"
+                >
+                  {copied ? <Check className="size-4" /> : <Link2 className="size-4" />} {copied ? "Link copied" : "Copy link"}
+                </button>
+                <button onClick={() => setShowCompare(false)} aria-label="Close">
+                  <X className="size-5" />
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px] text-sm">
