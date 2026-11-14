@@ -7,6 +7,7 @@ import { aiTools } from "@/lib/ai-tools";
 import { CurriculumRoadmap } from "@/components/curriculum-roadmap";
 import { LandingHero } from "@/components/landing-hero";
 import { TrackBooks } from "@/components/track-books";
+import { VideoShowcase } from "@/components/video-showcase";
 import { CardCarousel } from "@/components/card-carousel";
 import { LessonCard, TrackCard, type LessonCardData } from "@/components/landing-cards";
 import { readingTime } from "@/lib/reading-time";
@@ -74,6 +75,8 @@ export default function Home() {
           />
         ))}
       </CardCarousel>
+
+      <VideoShowcase agentsHref={tracks.find((t) => t.category === "03-agents")?.lessons[0]?.href ?? "/catalog"} />
 
       <CourseGrid lessons={getLessonCards()} />
 
