@@ -343,6 +343,11 @@ pre code > span::before {
 .prose :is(h1, h2, h3, h4) {
   scroll-margin-top: 6rem;
 }
+/* Long inline code (file paths, URLs) may break onto the next line on phones
+   instead of pushing the page sideways. Code blocks (pre) still scroll. */
+.prose :not(pre) > code {
+  overflow-wrap: anywhere;
+}
 
 /* Lesson illustrations */
 :root { --illus-bg: #f3f7ff; }

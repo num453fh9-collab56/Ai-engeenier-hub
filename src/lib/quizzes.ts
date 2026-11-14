@@ -406,6 +406,58 @@ export const quizzes: Record<string, QuizQuestion[]> = {
       why: "Model output is untrusted input. Parse and validate it — e.g. allow only arithmetic, as the safe calculator does.",
     },
   ],
+  "03-agents/mcp": [
+    {
+      q: "What problem does MCP mainly solve?",
+      options: [
+        "It makes models smarter at reasoning",
+        "It replaces M × N custom integrations with one standard, so a tool written once works in any compatible app",
+        "It trains models on your tools",
+        "It is a vector database for agents",
+      ],
+      answer: 1,
+      why: "Each app implements MCP once and each tool implements it once: M + N instead of M × N.",
+    },
+    {
+      q: "In MCP, which feature is controlled by the model (the model decides when to use it)?",
+      options: ["Resources", "Prompts", "Tools", "Transports"],
+      answer: 2,
+      why: "Tools are model-controlled; resources are app-controlled and prompts are user-picked.",
+    },
+    {
+      q: "Your stdio MCP server randomly breaks. You added print() calls for debugging. Why is that the likely cause?",
+      options: [
+        "print() is too slow",
+        "stdout carries the JSON-RPC messages, so printed text corrupts the protocol",
+        "print() is not allowed in async code",
+        "MCP servers cannot use Python's standard library",
+      ],
+      answer: 1,
+      why: "In stdio servers, log to stderr (e.g. the logging module) and keep stdout for protocol messages.",
+    },
+    {
+      q: "A tool receives limit=99 but only allows 1–20. What should it do so the model can recover?",
+      options: [
+        "Raise a ToolError so the call returns isError: true with a clear message",
+        "Raise a normal Python exception",
+        "Silently use limit=20",
+        "Crash the server so the host restarts it",
+      ],
+      answer: 0,
+      why: "Tool execution errors are returned to the model with isError: true so it can fix its arguments and retry.",
+    },
+    {
+      q: "What does it mean that the 2026-07-28 MCP spec is stateless?",
+      options: [
+        "Servers can't store any data",
+        "Tools can't return results",
+        "There is no initialize handshake or protocol session; each request carries its own version and capabilities, and state uses explicit handles",
+        "Only stdio is allowed",
+      ],
+      answer: 2,
+      why: "Statelessness makes servers easy to scale; cross-call state is passed as an explicit handle like basket_id.",
+    },
+  ],
   "03-agents/swarms": [
     {
       q: "According to Anthropic's report, what was the trade-off of its multi-agent research system?",

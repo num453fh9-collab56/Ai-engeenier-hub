@@ -1,0 +1,362 @@
+---
+title: "Model Context Protocol (MCP): Connecting Tools to Any AI App"
+description: "Write a tool once and use it from Claude, ChatGPT, IDEs and your own agents. Learn how MCP works (hosts, clients, servers; tools, resources, prompts), build a real MCP server and client with the official Python SDK v2, connect it to an LLM, and secure it."
+category: "03-agents"
+order: 2
+difficulty: "intermediate"
+tags:
+  - agents
+  - mcp
+  - tool-calling
+  - integrations
+  - python
+slug: "mcp"
+---
+
+## Why This Matters
+
+In the previous lesson you gave an agent tools by writing Python functions and their JSON schemas straight into your agent's code. That works — until you want the **same** tools somewhere else. Your notes search should work in your own agent, in Claude Desktop, in your code editor and in a teammate's app. Without a standard, every app needs its own custom integration: *M* apps × *N* tools = *M × N* pieces of glue code.
+
+The **Model Context Protocol (MCP)** fixes this the way USB fixed cables. You wrap a tool, a database or an API in an **MCP server** once, and every **MCP-compatible app** can discover and use it. Each app implements MCP once, each tool implements it once: *M + N* instead of *M × N*.
+
+Anthropic released MCP as an open standard in November 2024. In December 2025 it was donated to the **Agentic AI Foundation**, a fund under the Linux Foundation co-founded by Anthropic, Block and OpenAI, so no single company controls it. The Linux Foundation reported more than 10,000 published MCP servers at that point. If you build agents or AI features today, you will meet MCP.
+
+By the end of this lesson you will be able to:
+
+- explain the MCP architecture and its three server features: tools, resources and prompts,
+- build an MCP server in Python with the official SDK (v2),
+- connect to it from a client and from Claude Desktop,
+- plug **any** MCP server's tools into your own LLM agent,
+- avoid the security mistakes that make MCP servers dangerous.
+
+## The Architecture in One Picture
+
+MCP has three roles:
+
+| Role | What it is | Example |
+|---|---|---|
+| **Host** | The AI application the user talks to | Claude Desktop, an IDE, your own chat app |
+| **Client** | A connector inside the host — one per server | The part of your app that talks to `notes_server.py` |
+| **Server** | A program that exposes capabilities | A notes search, GitHub, a database, a weather API |
+
+The model never talks to a server directly. The **host** asks each server what it offers, shows those tools to the model, and when the model wants to use one, the host's client calls the server and passes the result back.
+
+Messages are **JSON-RPC 2.0** — small JSON objects with a `method`, `params` and an `id`. They travel over one of two standard **transports**:
+
+- **stdio** — the host starts the server as a child process and they talk over standard input/output. Best for local tools on your own machine.
+- **Streamable HTTP** — the server runs as a web service at a URL. Best for remote and shared servers. (The older HTTP+SSE transport is deprecated.)
+
+> **What changed in 2026:** the current specification (version **2026-07-28**) made MCP **stateless**. There is no connection handshake or protocol-level session any more: every request carries its own protocol version and client capabilities. If a server needs state across calls — a shopping cart, an open browser — it returns an explicit handle (like `basket_id`) that the model passes back as an ordinary tool argument. This makes MCP servers much easier to run behind load balancers. Older tutorials that mention `initialize` handshakes or `Mcp-Session-Id` describe the previous version.
+
+## What a Server Can Offer
+
+| Feature | Who controls it | Use it for |
+|---|---|---|
+| **Tools** | The **model** decides when to call them | Actions and lookups: search, create, send, calculate |
+| **Resources** | The **app** decides what to read | Data to read as context: a file, a note, a database row — addressed by a URI like `notes://n1` |
+| **Prompts** | The **user** picks them | Reusable templates, e.g. a "quiz me on…" command |
+
+Tools are the most used feature, and the one this lesson focuses on. Under the hood, using a tool is two messages. The client asks what exists:
+
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "tools/list" }
+```
+
+…gets back each tool's `name`, `description` and `inputSchema` (a JSON Schema), and later calls one:
+
+```json
+{
+  "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+  "params": { "name": "search_notes", "arguments": { "query": "chunking" } }
+}
+```
+
+You will almost never write this JSON by hand — the SDK does it — but knowing it makes debugging much easier.
+
+## Hands-On: Build an MCP Server
+
+We'll build a **study-notes server**: the model can search your notes and save new ones. Every code block in this lesson was run with the official Python SDK **`mcp` 2.3.0** (Python 3.10+).
+
+```bash
+# with uv (recommended by the MCP docs)
+uv init notes && cd notes
+uv add "mcp[cli]"
+# or with pip
+pip install "mcp[cli]"
+```
+
+> **Version note:** SDK v2 renamed the server class to **`MCPServer`** (`from mcp.server import MCPServer`). Many older tutorials use `FastMCP` from v1 — the ideas are the same, the import is different.
+
+```python
+# notes_server.py — an MCP server that gives any AI app access to your study notes
+import json
+import logging
+from pathlib import Path
+
+from mcp.server import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
+from mcp.types import ToolAnnotations
+
+logging.basicConfig(level=logging.INFO)  # logging goes to stderr — never print() in a stdio server
+log = logging.getLogger("notes")
+
+NOTES_FILE = Path(__file__).with_name("notes.json")
+mcp = MCPServer("study-notes")
+
+
+def load() -> list[dict]:
+    return json.loads(NOTES_FILE.read_text("utf-8")) if NOTES_FILE.exists() else []
+
+
+def save(notes: list[dict]) -> None:
+    NOTES_FILE.write_text(json.dumps(notes, indent=2), "utf-8")
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+def search_notes(query: str, limit: int = 5) -> list[dict]:
+    """Search study notes by keyword (title and body). Returns id, title and a short preview.
+
+    Args:
+        query: Words to look for, e.g. "chunking" or "LoRA rank"
+        limit: Maximum number of notes to return (1-20)
+    """
+    if not 1 <= limit <= 20:
+        raise ToolError("limit must be between 1 and 20")
+    words = query.lower().split()
+    hits = [n for n in load() if all(w in (n["title"] + " " + n["body"]).lower() for w in words)]
+    log.info("search %r -> %d hits", query, len(hits))
+    return [{"id": n["id"], "title": n["title"], "preview": n["body"][:120]} for n in hits[:limit]]
+
+
+@mcp.tool(annotations=ToolAnnotations(destructive_hint=False, idempotent_hint=False))
+def add_note(title: str, body: str) -> dict:
+    """Save a new study note. Use only when the user asks to save or remember something.
+
+    Args:
+        title: Short title (max 80 characters)
+        body: The note text
+    """
+    if not title.strip() or len(title) > 80:
+        raise ToolError("title is required and must be at most 80 characters")
+    notes = load()
+    note = {"id": f"n{len(notes) + 1}", "title": title.strip(), "body": body.strip()}
+    save(notes + [note])
+    return {"id": note["id"], "saved": True}
+
+
+@mcp.resource("notes://{note_id}", mime_type="text/markdown")
+def read_note(note_id: str) -> str:
+    """The full text of one note."""
+    for n in load():
+        if n["id"] == note_id:
+            return f"# {n['title']}\n\n{n['body']}"
+    raise ToolError(f"no note with id {note_id}")
+
+
+@mcp.prompt()
+def quiz_me(topic: str) -> str:
+    """Ask the assistant to quiz you on a topic using your own notes."""
+    return (
+        f"Search my notes for '{topic}'. Using only what they say, ask me 3 short "
+        "questions one at a time and tell me after each answer whether I was right."
+    )
+
+
+if __name__ == "__main__":
+    mcp.run(transport="stdio")
+```
+
+What the SDK does for you:
+
+- **Type hints become the input schema.** `query: str, limit: int = 5` turns into a JSON Schema with a required string and an optional integer. Docstrings become the tool and argument descriptions the model reads — so write them for the model.
+- **Return values become results.** Returning a list or dict gives the client both `structuredContent` (machine-readable JSON) and a text version.
+- **`ToolError` is a tool execution error.** The call returns `isError: true` with your message, so the model can read it and retry with better arguments. Any *other* exception is treated as a crash, and the model only sees a generic error.
+- **Annotations are hints** for the host — `read_only_hint=True` says the tool doesn't change anything, which a host can use to decide when to ask the user for confirmation. The spec says clients must treat annotations as untrusted unless they come from a trusted server.
+
+> **The #1 beginner bug:** in a **stdio** server, `print()` writes to standard output — the same channel the JSON-RPC messages use — and corrupts the protocol. Use `logging` (which writes to stderr) instead.
+
+### Test it with the Inspector
+
+```bash
+uv run mcp dev notes_server.py
+```
+
+This opens the **MCP Inspector** in your browser: you can list the tools, fill in arguments and see the exact JSON going back and forth. Use it before connecting any real app.
+
+## Connect a Client
+
+Here is a minimal client. It starts the server as a child process over stdio, discovers the tools and calls them:
+
+```python
+# client.py — connect to the server over stdio, discover its tools and call one
+import asyncio
+import sys
+
+from mcp import Client, StdioServerParameters
+
+server = StdioServerParameters(command=sys.executable, args=["notes_server.py"])
+
+
+async def main() -> None:
+    async with Client(server) as client:
+        tools = await client.list_tools()
+        for t in tools.tools:
+            print(f"- {t.name}: {t.description.splitlines()[0]}")
+
+        await client.call_tool("add_note", {"title": "Chunking", "body": "Split documents into 300-800 token chunks with overlap."})
+        result = await client.call_tool("search_notes", {"query": "chunking"})
+        print(result.structured_content)
+
+        bad = await client.call_tool("search_notes", {"query": "x", "limit": 99})
+        print(bad.is_error, bad.content[0].text)
+
+
+asyncio.run(main())
+```
+
+Output:
+
+```text
+- search_notes: Search study notes by keyword (title and body). Returns id, title and a short preview.
+- add_note: Save a new study note. Use only when the user asks to save or remember something.
+{'result': [{'id': 'n1', 'title': 'Chunking', 'preview': 'Split documents into 300-800 token chunks with overlap.'}]}
+True Error executing tool search_notes: limit must be between 1 and 20
+```
+
+Notice the last line: the bad call did **not** crash the client. It came back as a normal result with `is_error=True` — exactly what an agent needs to recover.
+
+To serve the same tools over the network, change one line to `mcp.run(transport="streamable-http")`. The server listens at `http://localhost:8000/mcp`, and a client connects with `Client("http://localhost:8000/mcp")`.
+
+### Use it from Claude Desktop
+
+Hosts like Claude Desktop read a config file listing your servers. On Windows, open `%APPDATA%\Claude\claude_desktop_config.json` and add:
+
+```json
+{
+  "mcpServers": {
+    "study-notes": {
+      "command": "uv",
+      "args": ["--directory", "C:\\ABSOLUTE\\PATH\\TO\\notes", "run", "notes_server.py"]
+    }
+  }
+}
+```
+
+Restart the app and your notes tools appear — no changes to your server code. That is the whole point of MCP.
+
+## Plug MCP Tools Into Your Own Agent
+
+The most useful trick: an MCP tool definition already contains everything an LLM's function-calling API needs. Convert it, and **any** MCP server becomes tools for **any** model. Here is the agent loop from the ReAct lesson, now powered by MCP, using Groq through its OpenAI-compatible API:
+
+```python
+# agent.py — let an LLM use ANY MCP server's tools (here: Groq via the OpenAI-compatible API)
+import asyncio
+import json
+import os
+import sys
+
+from mcp import Client, StdioServerParameters
+from openai import AsyncOpenAI
+
+llm = AsyncOpenAI(base_url="https://api.groq.com/openai/v1", api_key=os.environ["GROQ_API_KEY"])
+MODEL = "openai/gpt-oss-120b"
+server = StdioServerParameters(command=sys.executable, args=["notes_server.py"])
+
+
+def to_openai_tool(t) -> dict:
+    """MCP tool definition -> OpenAI function-calling format. The schema is reused as-is."""
+    return {"type": "function", "function": {"name": t.name, "description": t.description, "parameters": t.input_schema}}
+
+
+async def ask(question: str, max_steps: int = 5) -> str:
+    async with Client(server) as client:
+        tools = [to_openai_tool(t) for t in (await client.list_tools()).tools]
+        messages = [
+            {"role": "system", "content": "You are a study assistant. Use the tools to look things up in the user's notes."},
+            {"role": "user", "content": question},
+        ]
+        for _ in range(max_steps):  # hard limit: an agent loop must always end
+            reply = (await llm.chat.completions.create(model=MODEL, messages=messages, tools=tools)).choices[0].message
+            if not reply.tool_calls:
+                return reply.content
+            messages.append(reply.model_dump(exclude_none=True))
+            for call in reply.tool_calls:
+                args = json.loads(call.function.arguments or "{}")
+                print(f"  -> {call.function.name}({args})")
+                result = await client.call_tool(call.function.name, args)
+                text = "\n".join(c.text for c in result.content if c.type == "text")
+                messages.append({"role": "tool", "tool_call_id": call.id, "content": text})
+        return "Stopped: too many steps."
+
+
+if __name__ == "__main__":
+    print(asyncio.run(ask(" ".join(sys.argv[1:]) or "What did I write about chunking?")))
+```
+
+A real run (`pip install openai`, then `python agent.py`) — the model's wording changes from run to run:
+
+```text
+  -> search_notes({'limit': 10, 'query': 'chunking'})
+Here's the note you have on chunking:
+
+**Title:** *Chunking*
+**Preview:** "Split documents into 300-800 token chunks with overlap."
+
+If you'd like to see the full text or add anything else, just let me know!
+```
+
+Swap `notes_server.py` for a GitHub, database or browser MCP server and the same 40 lines become a completely different agent. Your agent code no longer needs to know anything about the tools in advance.
+
+## Mini Project: A Personal Course Assistant Server
+
+Extend the notes server into an assistant for your own learning:
+
+1. Add a tool `list_lessons(track)` that returns lesson titles and links from a small JSON file you write (for example, the tracks of this course).
+2. Add `mark_done(lesson_id)` and `progress()` tools that store which lessons you have finished. `mark_done` changes data, so give it a clear description of exactly what it does.
+3. Expose your progress as a **resource** (`progress://me`) and add a **prompt** `plan_my_week(hours: int)`.
+4. Test everything in the MCP Inspector, then connect it to Claude Desktop **and** to `agent.py`. Ask both: *"What should I study next, and save a note that I finished the ReAct lesson."*
+5. Log every tool call (name, arguments, duration) to stderr and read the log after a few conversations. Which descriptions confused the model?
+
+**Stretch goals**
+
+1. Switch to `streamable-http` and connect from a second machine on your network — then think about what an attacker on that network could do.
+2. Connect `agent.py` to **two** servers at once and prefix tool names (`notes.search`, `progress.get`) so they can't collide.
+3. Use the hybrid search from the RAG track inside `search_notes` instead of keyword matching.
+
+## Common Mistakes
+
+1. **`print()` in a stdio server.** It corrupts the JSON-RPC stream. Log to stderr.
+2. **Vague tool descriptions.** The model only sees the name, description and schema. "Search" is useless; "Search study notes by keyword, returns id, title and preview" works.
+3. **Raising normal exceptions for expected failures.** Use `ToolError` so the model gets a useful message and can retry, instead of a generic crash.
+4. **Too many tools.** Every tool definition is sent to the model and costs tokens. Dozens of overlapping tools make the model pick the wrong one. Keep servers focused.
+5. **Trusting third-party servers blindly.** A server runs code on your machine and its tool descriptions go straight into your model's context. Install servers like you install software: from sources you trust.
+6. **Following old tutorials without checking the version.** `FastMCP` imports, `initialize` handshakes and SSE transports belong to older SDK and spec versions.
+7. **Returning huge results.** A tool that dumps a 50-page document floods the context. Return previews and IDs, and let the model read the full item as a resource when it needs it.
+
+## Production Tips
+
+- **Human in the loop for actions.** The spec says hosts should let a human deny tool calls and should ask for confirmation on sensitive operations. Read-only tools can run freely; anything that sends, deletes or pays needs a confirmation.
+- **Validate everything on the server.** The spec requires servers to validate all tool inputs, implement access control, rate-limit tool calls and sanitize outputs. Never trust arguments just because a model produced them.
+- **Least privilege.** Give a server only the credentials it needs — a read-only database user for a read-only tool, a token scoped to one repository, not your whole account.
+- **Watch for prompt injection.** Text that tools return (web pages, emails, issues) can contain instructions aimed at the model. Treat tool output as data, and never let it silently trigger another sensitive tool.
+- **Remote servers need real auth.** For Streamable HTTP servers the spec defines OAuth-based authorization; don't expose an unauthenticated server on the internet.
+- **Stateless by design.** If you need state, return an opaque, random handle with an expiry and check authorization on every call that uses it.
+- **Trace tool calls.** Log server name, tool, arguments, duration and errors for every call — the same per-step tracing you added to your ReAct agent.
+
+## Key Takeaways
+
+- MCP is an open standard (now under the Linux Foundation's Agentic AI Foundation) that lets you write a tool once and use it from any compatible AI app.
+- Hosts contain clients; each client talks to one server over JSON-RPC, using stdio (local) or Streamable HTTP (remote).
+- Servers offer tools (model-controlled), resources (app-controlled) and prompts (user-controlled).
+- The current spec (2026-07-28) is stateless; the Python SDK v2 uses `MCPServer`, type hints and docstrings to generate tool schemas.
+- MCP tool definitions map directly onto function calling, so any MCP server can power your own agent.
+- Treat servers like software you install: validate inputs, use least privilege, confirm actions and guard against prompt injection.
+
+## Further Reading
+
+- Model Context Protocol, *Specification 2026-07-28* — [modelcontextprotocol.io](https://modelcontextprotocol.io/specification/latest)
+- Model Context Protocol, *Key changes in 2026-07-28* — [modelcontextprotocol.io](https://modelcontextprotocol.io/specification/2026-07-28/changelog)
+- Model Context Protocol, *Build an MCP server* — [modelcontextprotocol.io](https://modelcontextprotocol.io/docs/2026-07-28/develop/build-server)
+- Official Python SDK — [github.com/modelcontextprotocol/python-sdk](https://github.com/modelcontextprotocol/python-sdk)
+- Anthropic, *Donating the Model Context Protocol and establishing the Agentic AI Foundation* (Dec 2025) — [anthropic.com](https://www.anthropic.com/news/donating-the-model-context-protocol-and-establishing-of-the-agentic-ai-foundation)
+- Previous lesson: [ReAct Agent Architecture & Tool Calling](/docs/03-agents/react-pattern) · Next: [Multi-Agent Swarms & Delegation](/docs/03-agents/swarms)

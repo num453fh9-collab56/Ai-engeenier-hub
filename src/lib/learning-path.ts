@@ -52,7 +52,7 @@ export const PATH: PhaseDef[] = [
     goal: "Let models take actions safely through tools and the agent loop.",
     items: [
       { lesson: "03-agents/react-pattern" },
-      { planned: "Model Context Protocol (MCP): connecting tools" },
+      { lesson: "03-agents/mcp" },
       { planned: "Agent memory and state" },
     ],
   },
