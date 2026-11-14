@@ -1,9 +1,10 @@
 import { getAllDocs } from "@/lib/mdx";
 import { readingTime } from "@/lib/reading-time";
+import { capstoneBySlug } from "@/lib/capstones";
 
 // The single source of truth for the curriculum. Live lessons reference real
 // files; planned ones are clearly marked — never promise what doesn't exist.
-type Item = { lesson: string } | { planned: string };
+type Item = { lesson: string } | { planned: string } | { capstone: string };
 
 interface PhaseDef {
   id: string;
@@ -100,9 +101,9 @@ export const PATH: PhaseDef[] = [
     title: "Capstone Projects",
     goal: "Put it all together in portfolio projects you can show employers.",
     items: [
-      { planned: "Capstone: document Q&A assistant" },
-      { planned: "Capstone: customer-support agent" },
-      { planned: "Capstone: multi-agent research tool" },
+      { capstone: "document-qa-assistant" },
+      { capstone: "customer-support-agent" },
+      { capstone: "multi-agent-research-tool" },
     ],
   },
 ];
@@ -129,6 +130,12 @@ export function getLearningPath(): PathPhase[] {
   return PATH.map((p) => {
     const items: PathItem[] = p.items.map((it) => {
       if ("planned" in it) return { title: it.planned, live: false };
+      if ("capstone" in it) {
+        const c = capstoneBySlug[it.capstone];
+        return c
+          ? { title: `Capstone: ${c.title}`, live: true, href: `/capstones/${c.slug}`, difficulty: c.level.toLowerCase(), readTime: c.hours }
+          : { title: it.capstone, live: false };
+      }
       const d = docs.get(it.lesson);
       if (!d) return { title: it.lesson, live: false };
       return {

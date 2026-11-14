@@ -24,8 +24,10 @@ export function CurriculumRoadmap({
   const [open, setOpen] = useState<Set<string>>(() => new Set(allOpen ? phases.map((p) => p.id) : [phases[0]?.id]));
   const progress = useProgress();
 
-  const live = phases.reduce((n, p) => n + p.liveCount, 0);
-  const planned = phases.reduce((n, p) => n + p.items.length - p.liveCount, 0);
+  // count lessons only (capstone projects are live links but not lessons)
+  const items = phases.flatMap((p) => p.items);
+  const live = items.filter((i) => i.live && i.id).length;
+  const planned = items.filter((i) => !i.live).length;
   const done = phases.flatMap((p) => p.items).filter((i) => i.id && progress.completed[i.id]).length;
   const next = phases.flatMap((p) => p.items).find((i) => i.live && i.id && !progress.completed[i.id]);
 

@@ -12,8 +12,10 @@ export const metadata: Metadata = {
 
 export default function RoadmapPage() {
   const phases = getLearningPath();
-  const live = phases.reduce((n, p) => n + p.liveCount, 0);
-  const planned = phases.reduce((n, p) => n + p.items.length - p.liveCount, 0);
+  // lessons only — capstone projects are live links but not lessons
+  const items = phases.flatMap((p) => p.items);
+  const live = items.filter((i) => i.live && i.id).length;
+  const planned = items.filter((i) => !i.live).length;
 
   return (
     <div className="flex-1 w-full px-4 py-12">

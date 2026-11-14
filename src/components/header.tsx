@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Workflow, BarChart3, BookText, Library, Route, FlaskConical, Trophy, LayoutGrid } from "lucide-react";
+import { Workflow, BarChart3, BookText, Library, Route, FlaskConical, Trophy, LayoutGrid, Briefcase } from "lucide-react";
 import { LogoMark } from "@/components/logo";
 import { SearchCommand } from "@/components/search-command";
 import { ThemeSwitcher } from "@/components/theme-switcher";
@@ -32,6 +32,12 @@ export function Header({ tracks }: { tracks: TrackInfo[] }) {
             <Link href="/roadmap" aria-label="Roadmap">
               <Route className="size-3.5" />
               <span className="hidden md:inline">Roadmap</span>
+            </Link>
+          </Button>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/career" aria-label="Career guide">
+              <Briefcase className="size-3.5" />
+              <span className="hidden md:inline">Career</span>
             </Link>
           </Button>
           <Button variant="ghost" size="sm" asChild>

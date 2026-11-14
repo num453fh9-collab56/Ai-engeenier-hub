@@ -11,6 +11,8 @@ import { useMyStack } from "@/lib/my-stack";
 import { aiTools } from "@/lib/ai-tools";
 import type { TrackInfo } from "@/lib/tracks";
 import { ToolLogo } from "@/components/tool-logo";
+import { capstones, taskCount } from "@/lib/capstones";
+import { safeUrl, useCapstones } from "@/lib/capstone-progress";
 
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
@@ -34,7 +36,7 @@ function startOfWeek() {
 }
 
 // Everything the site keeps in this browser, so learners can back it up or move it
-const BACKUP_KEYS = ["aeh:progress", "aeh-my-stack", "aeh-arena-votes", "aeh-glossary-urdu", "aeh-weekly-goal"];
+const BACKUP_KEYS = ["aeh:progress", "aeh-my-stack", "aeh-arena-votes", "aeh-glossary-urdu", "aeh-weekly-goal", "aeh-capstones"];
 
 function readQuizScores(): Record<string, number> {
   const out: Record<string, number> = {};
@@ -50,6 +52,7 @@ function readQuizScores(): Record<string, number> {
 export function ProgressDashboard({ tracks, quizSizes }: { tracks: TrackInfo[]; quizSizes: Record<string, number> }) {
   const progress = useProgress();
   const stack = useMyStack();
+  const caps = useCapstones();
   const [quiz, setQuiz] = useState<Record<string, number>>({});
   const [goal, setGoal] = useState(3);
   const [msg, setMsg] = useState("");
@@ -289,6 +292,40 @@ export function ProgressDashboard({ tracks, quizSizes }: { tracks: TrackInfo[]; 
             </div>
           );
         })}
+      </section>
+
+      {/* Capstones / portfolio */}
+      <section className="rounded-xl border border-border bg-card p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 font-bold">
+            <Rocket className="size-4 text-primary" /> Capstone projects
+          </h2>
+          <Link href="/capstones" className="text-sm text-primary hover:underline">
+            All projects →
+          </Link>
+        </div>
+        <ul className="space-y-3">
+          {capstones.map((c) => {
+            const st = caps[c.slug];
+            const n = st?.done.length ?? 0;
+            const total = taskCount(c);
+            const repo = safeUrl(st?.repo);
+            const demo = safeUrl(st?.demo);
+            return (
+              <li key={c.slug}>
+                <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                  <Link href={`/capstones/${c.slug}`} className="font-medium hover:text-primary">{c.title}</Link>
+                  <span className="text-xs text-muted-foreground tabular-nums">{n}/{total} tasks</span>
+                  {repo && <a href={repo} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">Repo ↗</a>}
+                  {demo && <a href={demo} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">Demo ↗</a>}
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div className={`h-full rounded-full ${n === total ? "bg-emerald-500" : "bg-primary"}`} style={{ width: `${(n / total) * 100}%` }} />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       </section>
 
       {/* My stack */}

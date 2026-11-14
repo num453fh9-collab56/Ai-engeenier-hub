@@ -1,6 +1,8 @@
 import { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/site";
 import { getAllDocs } from "@/lib/mdx";
+import { capstones } from "@/lib/capstones";
+import { aiTools } from "@/lib/ai-tools";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = SITE_URL;
@@ -14,7 +16,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }));
 
+  const extra: MetadataRoute.Sitemap = [
+    "/career",
+    "/capstones",
+    ...capstones.map((c) => `/capstones/${c.slug}`),
+    ...aiTools.map((t) => `/directory/${t.slug}`),
+  ].map((path) => ({ url: `${baseUrl}${path}`, lastModified: new Date(), changeFrequency: "monthly" as const, priority: 0.7 }));
+
   return [
+    ...extra,
     {
       url: baseUrl,
       lastModified: new Date(),
