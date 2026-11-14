@@ -6,8 +6,10 @@ import { LogoMark } from "@/components/logo";
 import { SearchCommand } from "@/components/search-command";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Button } from "@/components/ui/button";
+import { MubeenNotifications } from "@/components/mubeen-notifications";
+import type { TrackInfo } from "@/lib/tracks";
 
-export function Header() {
+export function Header({ tracks }: { tracks: TrackInfo[] }) {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/95 backdrop-blur-md">
       <div className="flex h-14 items-center gap-2 px-4 max-w-screen-2xl mx-auto">
@@ -79,6 +81,7 @@ export function Header() {
           <ThemeSwitcher />
 
         </nav>
+        <MubeenNotifications tracks={tracks} />
       </div>
     </header>
   );

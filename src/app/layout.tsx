@@ -3,6 +3,7 @@ import { SITE_URL } from "@/lib/site";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Header } from "@/components/header";
+import { getTracks } from "@/lib/tracks";
 import { Footer } from "@/components/footer";
 import { AiAssistant } from "@/components/ai-assistant";
 import "./globals.css";
@@ -94,7 +95,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Header />
+          <Header tracks={getTracks()} />
           {children}
           <Footer />
           <AiAssistant />
