@@ -16,9 +16,9 @@ const TINTS = [
   "from-blue-100 to-indigo-200 dark:from-blue-950 dark:to-indigo-900",
 ];
 const LEVEL: Record<string, string> = {
-  beginner: "text-emerald-600 bg-emerald-500/10",
-  intermediate: "text-amber-600 bg-amber-500/10",
-  advanced: "text-rose-600 bg-rose-500/10",
+  beginner: "text-emerald-700 bg-emerald-500/10 dark:text-emerald-300",
+  intermediate: "text-amber-700 bg-amber-500/10 dark:text-amber-300",
+  advanced: "text-rose-700 bg-rose-500/10 dark:text-rose-300",
 };
 
 export interface LessonCardData {

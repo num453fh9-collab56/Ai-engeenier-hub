@@ -9,9 +9,9 @@ import type { LessonCardInfo } from "@/lib/lesson-cards";
 
 const LEVELS = ["beginner", "intermediate", "advanced"] as const;
 const LEVEL_STYLE: Record<string, string> = {
-  beginner: "bg-emerald-500/90 text-white",
-  intermediate: "bg-amber-500/90 text-white",
-  advanced: "bg-rose-500/90 text-white",
+  beginner: "bg-emerald-400 text-emerald-950",
+  intermediate: "bg-amber-400 text-amber-950",
+  advanced: "bg-rose-600 text-white",
 };
 
 export function CourseGrid({ lessons }: { lessons: LessonCardInfo[] }) {
