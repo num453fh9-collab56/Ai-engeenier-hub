@@ -162,7 +162,7 @@ export function HeroDemo({ embedded = false }: { embedded?: boolean }) {
         </div>
 
         {tab === "code" ? (
-          <div className={`${embedded ? "h-56 sm:h-60" : "h-64"} overflow-y-auto bg-[#0b1020] p-4`}>
+          <div className={`${embedded ? "h-40 sm:h-44" : "h-64"} overflow-y-auto bg-[#0b1020] p-4`}>
             <pre className="whitespace-pre-wrap font-mono text-[11.5px] leading-relaxed text-sky-100">
               {SNIPPETS[pickSnippet(question)].code}
             </pre>
@@ -171,18 +171,18 @@ export function HeroDemo({ embedded = false }: { embedded?: boolean }) {
             </Link>
           </div>
         ) : (
-        <div className={`${embedded ? "h-56 sm:h-60" : "h-64"} overflow-y-auto p-4 text-sm space-y-3`}>
+        <div className={`${embedded ? "h-40 sm:h-44" : "h-64"} overflow-y-auto p-4 text-sm space-y-3`}>
           {!question && (
             <div className="text-muted-foreground">
-              <p className="mb-3">
+              <p className="mb-2 text-xs">
                 Hi, I&apos;m Mubeen 👋 Ask me anything about LLMs, RAG or agents — try one:
               </p>
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1.5">
                 {suggestions.map((s) => (
                   <button
                     key={s}
                     onClick={() => ask(s)}
-                    className="text-left rounded-lg border border-border/60 bg-background/60 px-3 py-2 text-xs hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                    className="text-left rounded-lg border border-border/60 bg-background/60 px-3 py-1.5 text-xs hover:border-primary/40 hover:bg-primary/5 transition-colors"
                   >
                     {s}
                   </button>

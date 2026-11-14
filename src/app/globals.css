@@ -361,3 +361,19 @@ pre code > span::before {
 /* Logo colours (outline/brackets + circuit half) */
 :root { --logo-ink: #0f1e4a; --logo-deep: #12245c; }
 .dark { --logo-ink: #ede9fe; --logo-deep: #1e1b4b; }
+
+/* Premium glass card: frosted surface + thin gradient border + soft tinted shadow */
+:root { --glass-bg: rgb(255 255 255 / 0.72); }
+.dark { --glass-bg: color-mix(in oklab, var(--card) 78%, transparent); }
+.glass-card {
+  background:
+    linear-gradient(var(--glass-bg), var(--glass-bg)) padding-box,
+    linear-gradient(135deg,
+      color-mix(in oklab, var(--primary) 55%, transparent),
+      color-mix(in oklab, var(--border) 60%, transparent) 45%,
+      color-mix(in oklab, #22d3ee 45%, transparent)) border-box;
+  border: 1px solid transparent;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 12px 32px -14px color-mix(in oklab, var(--primary) 40%, transparent);
+}

@@ -10,7 +10,7 @@ const STEPS = [
   { label: "Vector DB", icon: Database },
   { label: "RAG Agent", icon: Bot },
   { label: "LLM Agent", icon: Sparkles },
-  { label: "Evaluation", icon: CheckCircle2 },
+  { label: "Eval", icon: CheckCircle2 },
 ];
 
 const STEP_MS = 900;
@@ -40,44 +40,42 @@ export function AgentWorkflow() {
     return () => clearInterval(id);
   }, []);
 
-  const progress = Math.min(1, active / (STEPS.length - 1));
-
   return (
-    <div className="rounded-2xl border border-white/60 bg-background/80 p-4 shadow-xl shadow-primary/10 ring-1 ring-border backdrop-blur-md dark:border-white/10">
-      <div className="mb-3 flex items-center gap-2">
-        <Workflow className="size-4 text-primary" />
-        <p className="text-sm font-semibold">Multi-agent RAG workflow</p>
-        <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-          Demo run · simulated
+    <div className="glass-card rounded-2xl px-3.5 py-3">
+      <div className="mb-2.5 flex items-center gap-1.5">
+        <Workflow className="size-3.5 text-primary" />
+        <p className="text-xs font-semibold tracking-tight">Multi-agent RAG workflow</p>
+        <span className="ml-auto rounded-full border border-border/70 px-1.5 py-px text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+          Simulated demo
         </span>
       </div>
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+      <div className="flex items-center gap-3">
         {/* pipeline */}
-        <ol className="flex flex-1 items-center justify-between gap-1">
+        <ol className="flex flex-1 items-center">
           {STEPS.map((s, i) => {
-            const on = i <= active && active < STEPS.length + 1;
             const current = i === active;
+            const on = i <= active;
             return (
               <li key={s.label} className="flex flex-1 items-center last:flex-none">
-                <div className="flex flex-col items-center gap-1">
+                <div className="flex flex-col items-center gap-0.5">
                   <span
-                    className={`flex size-9 items-center justify-center rounded-xl border transition-all duration-500 ${
+                    className={`flex size-7 items-center justify-center rounded-lg border transition-all duration-500 ${
                       current
-                        ? "scale-110 border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/40"
+                        ? "scale-110 border-transparent bg-gradient-to-br from-primary to-cyan-500 text-white shadow-md shadow-primary/40"
                         : on
                           ? "border-primary/40 bg-primary/10 text-primary"
-                          : "border-border bg-card text-muted-foreground"
+                          : "border-border bg-background/60 text-muted-foreground"
                     }`}
                   >
-                    <s.icon className="size-4" />
+                    <s.icon className="size-3.5" />
                   </span>
-                  <span className="whitespace-nowrap text-[10px] text-muted-foreground">{s.label}</span>
+                  <span className="whitespace-nowrap text-[9px] text-muted-foreground">{s.label}</span>
                 </div>
                 {i < STEPS.length - 1 && (
-                  <span className="relative mx-1 mb-4 h-0.5 flex-1 overflow-hidden rounded-full bg-border">
+                  <span className="relative mx-1 mb-3 h-px flex-1 overflow-hidden bg-border">
                     <span
-                      className="absolute inset-y-0 left-0 rounded-full bg-primary transition-all duration-700"
+                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary to-cyan-500 transition-all duration-700"
                       style={{ width: i < active ? "100%" : "0%" }}
                     />
                   </span>
@@ -88,21 +86,17 @@ export function AgentWorkflow() {
         </ol>
 
         {/* metrics */}
-        <dl className="grid w-full grid-cols-3 gap-2 text-[11px] sm:w-40 sm:grid-cols-1">
-          <div>
-            <dt className="flex justify-between text-muted-foreground">
-              Latency <span className="font-semibold text-foreground">{run.latency ? `${run.latency} ms` : "—"}</span>
-            </dt>
-            <dd className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
-              <span className="block h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${progress * 100}%` }} />
-            </dd>
-          </div>
-          <div className="flex justify-between text-muted-foreground">
-            Tokens <span className="font-semibold text-foreground">{run.tokens ? run.tokens.toLocaleString() : "—"}</span>
-          </div>
-          <div className="flex justify-between text-muted-foreground">
-            Eval score <span className="font-semibold text-emerald-600 dark:text-emerald-400">{run.score ? run.score.toFixed(2) : "…"}</span>
-          </div>
+        <dl className="hidden w-28 shrink-0 space-y-1 border-l border-border/70 pl-3 text-[10px] sm:block">
+          {[
+            ["Latency", run.latency ? `${run.latency} ms` : "—", ""],
+            ["Tokens", run.tokens ? run.tokens.toLocaleString() : "—", ""],
+            ["Eval", run.score ? run.score.toFixed(2) : "…", "text-emerald-600 dark:text-emerald-400"],
+          ].map(([k, v, cls]) => (
+            <div key={k} className="flex justify-between text-muted-foreground">
+              <dt>{k}</dt>
+              <dd className={`font-semibold tabular-nums text-foreground ${cls}`}>{v}</dd>
+            </div>
+          ))}
         </dl>
       </div>
     </div>
