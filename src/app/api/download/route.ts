@@ -44,7 +44,10 @@ export async function GET(request: NextRequest) {
       `> ${d.description}`,
       "",
       // Demote lesson headings one level so chapters stay top-level
-      demoteHeadings(d.content).trim(),
+      // Video embeds can't play in Markdown — leave a short note instead
+      demoteHeadings(
+        d.content.replace(/<N8nAgentsVideo\s*\/>/g, "*(Video: an n8n multi-agent workflow — watch it in this lesson on the website.)*")
+      ).trim(),
       "",
     ]),
   ];

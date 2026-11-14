@@ -1,6 +1,7 @@
 import type { MDXComponents } from "mdx/types";
 import { CopyButton } from "@/components/copy-button";
 import { Mermaid } from "@/components/mermaid";
+import { N8nAgentsVideo } from "@/components/n8n-agents-video";
 
 function getTextContent(node: React.ReactNode): string {
   if (typeof node === "string") return node;
@@ -29,6 +30,7 @@ function PreWithCopy({ children, ...props }: React.HTMLAttributes<HTMLPreElement
 
 export const mdxComponents: MDXComponents = {
   pre: PreWithCopy,
+  N8nAgentsVideo,
   Mermaid: (props: { chart?: string; children?: string }) => {
     const chart = props.chart ?? (typeof props.children === "string" ? props.children : "");
     return <Mermaid chart={chart} />;

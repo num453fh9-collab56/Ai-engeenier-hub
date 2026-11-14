@@ -76,7 +76,7 @@ export default function Home() {
         ))}
       </CardCarousel>
 
-      <VideoShowcase agentsHref={tracks.find((t) => t.category === "03-agents")?.lessons[0]?.href ?? "/catalog"} />
+      <VideoShowcase />
 
       <CourseGrid lessons={getLessonCards()} />
 
